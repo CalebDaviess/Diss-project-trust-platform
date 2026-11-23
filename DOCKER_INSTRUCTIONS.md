@@ -88,7 +88,7 @@ docker compose down -v
 This repository includes a GitHub Actions workflow ([`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml)) that **automatically rebuilds and pushes all 3 images to Docker Hub** (for both `linux/amd64` and `linux/arm64`) whenever code changes are pushed to `main` or a `v*` tag is created.
 
 Every push updates:
-- **`:latest`** — so anyone running `docker compose pull && docker compose up -d` always gets the newest version automatically.
+- **`:latest`** — so anyone running `docker compose up -d --pull always` always gets the newest version automatically.
 - **`:sha-<commit>`** (and **`:v1.0`** on git tags) — immutable tags tied to the exact commit for reproducibility.
 
 #### One-time setup (takes ~1 minute)
@@ -106,11 +106,11 @@ Every push updates:
 
 3. **Trigger the first publish:**
    - Go to the **Actions** tab on GitHub → **Build & Publish Docker Images** → click **Run workflow** (or push any change to `main`).
-   - Once complete, all 3 repositories (`trust-platform-engine`, `trust-platform-api`, `trust-platform-portal`) appear on Docker Hub (public by default) and will auto-update on every future push to `main`.
+   - Once complete, all 3 repositories (`trust-platform-engine`, `trust-platform-api`, `trust-platform-portal`) appear on Docker Hub (`https://hub.docker.com/u/calebdavies03`, public by default) and will auto-update on every future push to `main`.
 
-> **Tip for testers updating to your newest changes:** Anyone who already ran the app just runs:
+> **Tip for testers updating to your newest changes:** Anyone who already ran the app just re-runs:
 > ```bash
-> docker compose pull && docker compose up -d
+> docker compose up -d --pull always
 > ```
 > Docker Compose checks Docker Hub for a newer `:latest` digest, downloads only the changed layers, and recreates only the updated container(s).
 
@@ -120,7 +120,7 @@ Every push updates:
 
 Follow these steps from the root of the repository if you prefer to push manually instead of using GitHub Actions.
 
-### 1. Sign in to Docker Hub
+#### 1. Sign in to Docker Hub
 
 Create a free account at https://hub.docker.com if you don't already have one, then run:
 
@@ -135,7 +135,7 @@ Enter your Docker Hub username (default in `docker-compose.yml` is `calebdavies0
 >
 > You can also permanently change the default `calebdavies03` in `docker-compose.yml`.
 
-### 2. Build all 3 custom images locally
+#### 2. Build all 3 custom images locally
 
 ```bash
 docker compose build
@@ -148,7 +148,7 @@ This builds and tags:
 
 *(The ML model is trained automatically inside `trust-platform-engine` during build, and the Quarkus API generates a fresh runtime RS256 JWT keypair on container startup so no private keys are ever baked into public images.)*
 
-### 3. Test locally before pushing
+#### 3. Test locally before pushing
 
 ```bash
 docker compose up -d
@@ -156,15 +156,15 @@ docker compose ps
 ```
 Open http://localhost:5173 and verify sign-in, sample submission, and results work as expected.
 
-### 4. Push the images to Docker Hub
+#### 4. Push the images to Docker Hub
 
 ```bash
 docker compose push
 ```
 
-Once pushed, all 3 repositories appear under your Docker Hub profile (`hub.docker.com/u/<username>`). Make sure they are set to **Public** on Docker Hub so anyone can pull them without logging in.
+Once pushed, all 3 repositories appear under your Docker Hub profile (`https://hub.docker.com/u/calebdavies03`). Make sure they are set to **Public** on Docker Hub so anyone can pull them without logging in.
 
-### Optional: Publish a versioned release tag
+#### Optional: Publish a versioned release tag
 
 ```powershell
 # PowerShell
@@ -173,7 +173,7 @@ docker compose build
 docker compose push
 ```
 
-### Optional: Multi-architecture push (Windows/Linux Intel + Apple Silicon Macs)
+#### Optional: Multi-architecture push (Windows/Linux Intel + Apple Silicon Macs)
 
 If testers may run on both Intel/AMD (`amd64`) and Apple Silicon M1–M4 (`arm64`) machines:
 
