@@ -15,16 +15,25 @@ The empirical core is **conduct classification on synthetic numerical features**
 - [ ] Rename folder `detection-engine/` → `conduct-detection-engine/` and update root [README](../../README.md) (deferred — cosmetic; would touch ~30 wikilinks + dev.sh) #todo
 - [x] Set synthetic numerical feature generation as the only current model-data approach; exclude public-corpus rows, real chat/audio and ASR → [[Synthetic-Data]], [[Features]]
 
+## 🐳 Packaging, Docker Hub & CI/CD
+- [x] Migrate project to public GitHub repo (`CalebDaviess/Diss-project-trust-platform`) with Windows `dev.ps1` launcher and Maven Wrapper (`mvnw` / `mvnw.cmd`)
+- [x] Containerise all 3 services (`detection-engine`, `accountability-service`, `player-portal`) + PostgreSQL 16 & Apache Kafka 3.9 (KRaft) in root `docker-compose.yml` (ephemeral runtime JWT keys, Nginx `/api` proxy, non-root containers)
+- [x] Set up GitHub Actions multi-arch (`linux/amd64`, `linux/arm64`) auto-build & publish to Docker Hub (`calebdavies03/trust-platform-*`) on push to `main` / `v*` tags
+- [x] Verify end-to-end external-user setup (`download docker-compose.yml` → `docker compose up -d --pull always`) and write `DOCKER_INSTRUCTIONS.md` + updated `README.md`
+- [ ] Add `DOCKERHUB_README.md` + auto-sync step in `.github/workflows/docker-publish.yml` so the 3 Docker Hub Overview tabs show run instructions automatically #todo
+- [ ] Add automated CI test gate (`pytest`, `./mvnw test`, `npm test`, `npm run build`) before Docker Hub publish so broken commits never overwrite `:latest` #todo
+
 ## Platform-first front end (player-facing dashboard)
-- [ ] Rebuild portal so sign-in lands the player on an **account dashboard**: trust score + accountability record (past bans/reports/audit trail) are the hero; conduct-sample submission becomes a secondary/demo panel → [[web-module]] #todo
-- [ ] **Dev demo data**: the dev account uses the *exact same* setup a real player gets, so it starts with **no connected games**. For the demo, simulate connecting **two games with history** for that player (bans/reports/audit across both) so the cross-game record shows working. Dev testing only, add later. #todo
-- [ ] Build a working **age-appropriate access** demo (not the core driver) #todo
+- [x] Rebuild portal so sign-in lands the player on an **account dashboard**: trust score + accountability record (past bans/reports/audit trail) are the hero; conduct-sample submission becomes a secondary/demo panel → [[web-module]]
+- [ ] **Dev demo data**: pre-seed `player@example.com` (opt-in demo flag) with **two linked games and realistic cross-game history** (conduct report, anti-cheat verdict/ban, appealable sanction & audit trail) so Docker testers see a populated dashboard on first login #todo
+- [x] Build a working **age-appropriate access** demo (guardian-controlled minor accounts + `AgeGateDemo`)
 
 ## Ethics & submission
 - [x] Update the ethics application and participant information, consent and withdrawal documents for the current synthetic-feature platform and anonymous survey → `09-ethics`, `10-SurveyForms`
 - [x] Add the approved role/eligibility screener and one example attitude question to the application; the full questionnaire is not yet drafted.
 - [x] Include an optional local Docker demo and anonymous exploratory feedback as an opt-in activity in the ethics description and participant sheets.
-- [ ] Package and check the local Docker demo (synthetic accounts/data only), then add its link and optional feedback items to Microsoft Forms before recruitment.
+- [x] Package and check the local Docker demo (synthetic accounts/data only, public on Docker Hub `calebdavies03/trust-platform-*`).
+- [ ] Add the GitHub / Docker demo link and optional feedback items to Microsoft Forms before recruitment. #todo
 - [ ] Confirm the 10-year retention period and the applicable policy with the supervisor.
 - [ ] Ask the supervisor to complete prior participant-research experience; obtain applicant and supervisor signatures/dates.
 - [ ] Complete and attach the full survey questionnaire if required; verify final Microsoft Forms settings and participant documents.
