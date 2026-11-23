@@ -84,17 +84,44 @@ the operator — plus one **inbound** seam where external anti-cheats push verdi
 
 ## Quick Start
 
-### Option 1: Docker / Docker Hub (no Java, Python, or Node required)
+### Option 1: Run with Docker (recommended for testers / evaluators)
 
-Pull prebuilt images from Docker Hub (or build locally) and run the full 5-container stack (UI + API + ML engine + PostgreSQL + Kafka):
+No Python, Java, Maven, or Node.js required — only **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** running.
+
+**1. Download `docker-compose.yml`** into any folder (no need to clone the whole repo):
+
+```powershell
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/CalebDaviess/Diss-project-trust-platform/main/docker-compose.yml" -OutFile "docker-compose.yml"
+```
+
+```bash
+# macOS / Linux
+curl -fsSLO https://raw.githubusercontent.com/CalebDaviess/Diss-project-trust-platform/main/docker-compose.yml
+```
+
+**2. Pull the latest images from Docker Hub and start the stack:**
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Then open **http://localhost:5173** (demo login: `player@example.com` / `demo-password`).
-See **[DOCKER_INSTRUCTIONS.md](DOCKER_INSTRUCTIONS.md)** for full pull/run, Docker Desktop, and Docker Hub publishing steps.
+This starts all 5 containers grouped under **`trust-platform`** in Docker Desktop (PostgreSQL, Kafka, ML detection engine, and Quarkus API running in the background; the React Player Portal UI exposed on port `5173`).
+
+**3. Open the app in your browser** (wait ~20s on first boot for Postgres, Kafka & Flyway migrations):
+
+| Service | URL |
+|---------|-----|
+| **Player Portal UI (start here)** | http://localhost:5173 |
+| ML Detection Engine (Swagger) | http://localhost:8000/docs |
+| Accountability API | http://localhost:8081 |
+
+- **Demo sign-in (prefilled):** `player@example.com` / `demo-password` (or click **Create account** to register a new player).
+- **Get the latest updates anytime:** re-run `docker compose pull && docker compose up -d`.
+- **Stop / reset data:** `docker compose down` (keeps DB) or `docker compose down -v` (wipes DB for a clean slate).
+
+See **[DOCKER_INSTRUCTIONS.md](DOCKER_INSTRUCTIONS.md)** for Docker Desktop walkthroughs, troubleshooting, and automatic Docker Hub publishing setup.
 
 ### Option 2: Local dev — one command (recommended for development)
 
