@@ -1,5 +1,5 @@
 # ── Stage 1: Build Quarkus fast-jar with Maven & JDK 21 ───────────────────────
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+FROM --platform=$BUILDPLATFORM maven:3.9.9-eclipse-temurin-21 AS build
 
 WORKDIR /workspace
 

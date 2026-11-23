@@ -82,9 +82,44 @@ docker compose down -v
 
 ---
 
-## Part 2: Building & Publishing to Docker Hub (For the Repo Owner)
+## Part 2: Publishing & Auto-Updating on Docker Hub (For the Repo Owner)
 
-Follow these steps from the root of the repository whenever you want to publish (or update) the images on Docker Hub.
+### Option A — Automatic builds on every `git push` (Recommended)
+
+This repository includes a GitHub Actions workflow ([`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml)) that **automatically rebuilds and pushes all 3 images to Docker Hub** (for both `linux/amd64` and `linux/arm64`) whenever code changes are pushed to `main` or a `v*` tag is created.
+
+Every push updates:
+- **`:latest`** — so anyone running `docker compose pull && docker compose up -d` always gets the newest version automatically.
+- **`:sha-<commit>`** (and **`:v1.0`** on git tags) — immutable tags tied to the exact commit for reproducibility.
+
+#### One-time setup (takes ~1 minute)
+
+1. **Create a Docker Hub Access Token:**
+   - Sign in at https://hub.docker.com
+   - Go to **Account Settings → Personal access tokens → Generate new token**
+   - Give it a name (e.g. `github-actions-trust-platform`) and **Read & Write** permissions, then copy the token.
+
+2. **Add 2 Secrets to your GitHub repository:**
+   - Open your repo on GitHub → **Settings → Secrets and variables → Actions → New repository secret**
+   - Add:
+     - `DOCKERHUB_USERNAME` = your Docker Hub username (e.g. `calebdaviess`)
+     - `DOCKERHUB_TOKEN` = the access token you just generated
+
+3. **Trigger the first publish:**
+   - Go to the **Actions** tab on GitHub → **Build & Publish Docker Images** → click **Run workflow** (or push any change to `main`).
+   - Once complete, all 3 repositories (`trust-platform-engine`, `trust-platform-api`, `trust-platform-portal`) appear on Docker Hub (public by default) and will auto-update on every future push to `main`.
+
+> **Tip for testers updating to your newest changes:** Anyone who already ran the app just runs:
+> ```bash
+> docker compose pull && docker compose up -d
+> ```
+> Docker Compose checks Docker Hub for a newer `:latest` digest, downloads only the changed layers, and recreates only the updated container(s).
+
+---
+
+### Option B — Manual build & push from your laptop
+
+Follow these steps from the root of the repository if you prefer to push manually instead of using GitHub Actions.
 
 ### 1. Sign in to Docker Hub
 
