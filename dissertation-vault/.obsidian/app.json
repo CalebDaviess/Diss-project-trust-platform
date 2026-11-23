@@ -1,0 +1,16 @@
+{
+  "legacyEditor": false,
+  "livePreview": true,
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "07-results/figures",
+  "alwaysUpdateLinks": true,
+  "showUnsupportedFiles": true,
+  "defaultViewMode": "preview",
+  "strictLineBreaks": false,
+  "readableLineLength": true,
+  "showLineNumber": false,
+  "foldHeading": true,
+  "foldIndent": true,
+  "showFrontmatter": true
+}

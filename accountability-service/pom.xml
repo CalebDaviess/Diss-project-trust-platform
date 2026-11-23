@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.trustplatform</groupId>
+    <artifactId>accountability-service</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <name>Trust Platform :: Accountability Service</name>
+    <description>Quarkus accountability service vertical slice.</description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
+        <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
+        <quarkus.platform.version>3.23.0</quarkus.platform.version>
+        <surefire.version>3.5.2</surefire.version>
+        <!-- Security pins (CVE remediation): patch-level bumps within the same minor
+             lines shipped by quarkus-bom 3.23.0 (Jackson 2.18.x, Netty 4.1.x).
+             These BOMs are imported BEFORE quarkus-bom so their versions win. -->
+        <jackson-bom.version>2.18.11</jackson-bom.version>
+        <!-- Netty 4.1.136 already fixed CVE-2025-55163 (HTTP/2 MadeYouReset DoS).
+             Bump to 4.1.137 to also fix CVE-2026-75595 (CRITICAL SNI routing bypass)
+             and CVE-2026-75596 (fragmented ClientHello quadratic reassembly). -->
+        <netty-bom.version>4.1.137.Final</netty-bom.version>
+        <!-- Pin PostgreSQL JDBC driver (transitive via quarkus-jdbc-postgresql, 42.7.5).
+             42.7.12 fixes CVE-2025-49146, CVE-2026-42198 and CVE-2026-54291. -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <!-- Kafka messaging codecs (transitive via quarkus-messaging-kafka). Patch bumps
+             to the fixed releases flagged by the Trivy scan. -->
+        <kafka-clients.version>3.9.2</kafka-clients.version>
+        <lz4-java.version>1.11.4</lz4-java.version>
+        <snappy-java.version>1.1.10.9</snappy-java.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- CVE remediation: pin Jackson to fixed patch release (2.18.3 -> 2.18.11).
+                 Resolves jackson-databind & jackson-core CVEs pulled in transitively. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- CVE remediation: pin Netty to fixed patch release (4.1.121 -> 4.1.136).
+                 Resolves netty-codec-dns CVEs pulled in transitively via Kafka messaging. -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- CVE remediation: pin PostgreSQL JDBC driver (42.7.5 -> 42.7.12).
+                 Resolves CVE-2025-49146 (channel-binding auth bypass),
+                 CVE-2026-42198 (SCRAM PBKDF2 DoS) and CVE-2026-54291 (channel-binding
+                 downgrade). Pulled in transitively via quarkus-jdbc-postgresql. -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+            <!-- CVE remediation: pin Kafka client (3.9.0 -> 3.9.2). Resolves
+                 CVE-2026-35554 (HIGH producer buffer-pool race), CVE-2025-27817
+                 (SSRF/arbitrary file read) and CVE-2026-33558 (DEBUG log info leak).
+                 Transitive via quarkus-messaging-kafka. -->
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka-clients.version}</version>
+            </dependency>
+            <!-- CVE remediation: pin snappy-java (1.1.10.5 -> 1.1.10.9). Resolves
+                 CVE-2026-108106 and CVE-2026-93451 (HIGH) plus CVE-2026-116590.
+                 Kafka compression codec (transitive via kafka-clients). -->
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy-java.version}</version>
+            </dependency>
+            <!-- CVE remediation: pin lz4-java to 1.11.4. Kafka 3.9.2 migrated from the
+                 unmaintained org.lz4:lz4-java to the maintained fork at.yawk.lz4:lz4-java
+                 (resolves transitively at 1.10.1); 1.11.4 fixes CVE-2026-106451 (HIGH
+                 native-library temp-dir replacement) and the LZ4 stream/XXHash DoS
+                 advisories. Kafka compression codec (transitive via kafka-clients). -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>${quarkus.platform.artifact-id}</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-validator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-jwt</artifactId>
+        </dependency>
+        <!-- Issue/sign JWTs from POST /auth. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-jwt-build</artifactId>
+        </dependency>
+        <!-- BcryptUtil (hashing) + Elytron PasswordFactory (verification) for stored credentials. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-elytron-security-common</artifactId>
+        </dependency>
+        <!-- Cheat-report transport: Kafka + CloudEvents (SmallRye Reactive Messaging). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-messaging-kafka</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5-mockito</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- In-memory Reactive Messaging connector: exercise the cheat-report flow without a broker. -->
+        <dependency>
+            <groupId>io.smallrye.reactive</groupId>
+            <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                        <maven.home>${maven.home}</maven.home>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Auto-generate the DEV JWT signing keypair when it is absent (the keys
+             are .gitignored and never committed). Activates only when the private
+             key is missing, so it is idempotent and runs for `mvn quarkus:dev`,
+             `mvn test`/`verify`, etc. Requires bash + openssl (present in the
+             Unix-first local dev setup). CI does not build this module, so no key
+             is ever produced in the CI workspace. -->
+        <profile>
+            <id>generate-jwt-keys</id>
+            <activation>
+                <file>
+                    <missing>src/main/resources/jwt/privateKey.pem</missing>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>generate-jwt-keys</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/generate-jwt-keys.sh</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
