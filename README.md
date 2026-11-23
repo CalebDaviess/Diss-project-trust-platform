@@ -84,7 +84,19 @@ the operator — plus one **inbound** seam where external anti-cheats push verdi
 
 ## Quick Start
 
-### One command (recommended)
+### Option 1: Docker / Docker Hub (no Java, Python, or Node required)
+
+Pull prebuilt images from Docker Hub (or build locally) and run the full 5-container stack (UI + API + ML engine + PostgreSQL + Kafka):
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Then open **http://localhost:5173** (demo login: `player@example.com` / `demo-password`).
+See **[DOCKER_INSTRUCTIONS.md](DOCKER_INSTRUCTIONS.md)** for full pull/run, Docker Desktop, and Docker Hub publishing steps.
+
+### Option 2: Local dev — one command (recommended for development)
 
 Boot **all four parts** — the ML scorer, the backend (which auto-starts PostgreSQL + Kafka
 via Quarkus Dev Services), and the web portal — with a single script:

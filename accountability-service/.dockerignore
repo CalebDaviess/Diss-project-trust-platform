@@ -1,0 +1,9 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+.quarkus/
+.github/
+src/main/resources/jwt/*.pem
+*.log
+.git/

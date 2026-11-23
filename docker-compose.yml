@@ -1,0 +1,114 @@
+name: trust-platform
+
+services:
+  # ── 1. PostgreSQL database (background) ─────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: trust-platform-postgres
+    environment:
+      POSTGRES_DB: accountability
+      POSTGRES_USER: trustplatform
+      POSTGRES_PASSWORD: trustplatform
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustplatform -d accountability"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  # ── 2. Apache Kafka broker in KRaft mode (background, no ZooKeeper) ─────────
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: trust-platform-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      start_period: 20s
+      retries: 12
+    restart: unless-stopped
+
+  # ── 3. Conduct Detection Engine — Python / FastAPI / scikit-learn (background)
+  detection-engine:
+    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-engine:${IMAGE_TAG:-latest}
+    build:
+      context: ./detection-engine
+      dockerfile: Dockerfile
+    container_name: trust-platform-engine
+    ports:
+      - "${ENGINE_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 6
+    restart: unless-stopped
+
+  # ── 4. Accountability Service — Java / Quarkus REST API (background) ────────
+  accountability-service:
+    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-api:${IMAGE_TAG:-latest}
+    build:
+      context: ./accountability-service
+      dockerfile: Dockerfile
+    container_name: trust-platform-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      detection-engine:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8081}:8081"
+    environment:
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/accountability
+      QUARKUS_DATASOURCE_USERNAME: trustplatform
+      QUARKUS_DATASOURCE_PASSWORD: trustplatform
+      QUARKUS_DATASOURCE_DEVSERVICES_ENABLED: "false"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      DETECTION_ENGINE_URL: http://detection-engine:8000
+      QUARKUS_HTTP_CORS: "true"
+      QUARKUS_HTTP_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      QUARKUS_HTTP_CORS_METHODS: GET,POST,PUT,DELETE,OPTIONS
+      # Enable interactive prototype/demo features in the packaged container
+      ACCOUNTABILITY_AUTH_SEED_DEMO_USER: "true"
+      ACCOUNTABILITY_AUTH_ALLOW_SELF_REGISTER: "true"
+      ACCOUNTABILITY_DEMO_ALLOW_SIMULATED_ANTI_CHEAT: "true"
+      ACCOUNTABILITY_DEMO_ALLOW_APPEAL_RESOLUTION: "true"
+      ACCOUNTABILITY_DEMO_ALLOW_SIMULATED_BAN: "true"
+    restart: unless-stopped
+
+  # ── 5. Player Portal — React / Nginx Web UI (user-facing frontend) ──────────
+  player-portal:
+    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-portal:${IMAGE_TAG:-latest}
+    build:
+      context: ./player-portal
+      dockerfile: Dockerfile
+    container_name: trust-platform-portal
+    depends_on:
+      accountability-service:
+        condition: service_healthy
+    ports:
+      - "${PORTAL_PORT:-5173}:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
