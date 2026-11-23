@@ -39,12 +39,11 @@ When running, Docker Desktop shows a single grouped stack named **`trust-platfor
    curl -fsSLO https://raw.githubusercontent.com/CalebDaviess/Diss-project-trust-platform/main/docker-compose.yml
    ```
 
-2. Pull the images from Docker Hub and start all containers in the background:
+2. Pull the latest images from Docker Hub and start all containers in the background (one command):
    ```bash
-   docker compose pull
-   docker compose up -d
+   docker compose up -d --pull always
    ```
-   *(If you are pulling from a different Docker Hub account than `calebdaviess`, set `DOCKERHUB_USER=<username>` first.)*
+   *(If you are pulling from a different Docker Hub account than `calebdavies03`, set `DOCKERHUB_USER=<username>` first.)*
 
 3. Wait ~15–25 seconds for PostgreSQL, Kafka, and Quarkus to become healthy, then check status:
    ```bash
@@ -102,7 +101,7 @@ Every push updates:
 2. **Add 2 Secrets to your GitHub repository:**
    - Open your repo on GitHub → **Settings → Secrets and variables → Actions → New repository secret**
    - Add:
-     - `DOCKERHUB_USERNAME` = your Docker Hub username (e.g. `calebdaviess`)
+     - `DOCKERHUB_USERNAME` = your Docker Hub username (e.g. `calebdavies03`)
      - `DOCKERHUB_TOKEN` = the access token you just generated
 
 3. **Trigger the first publish:**
@@ -128,13 +127,13 @@ Create a free account at https://hub.docker.com if you don't already have one, t
 ```bash
 docker login
 ```
-Enter your Docker Hub username (default in `docker-compose.yml` is `calebdaviess`) and password / Personal Access Token.
+Enter your Docker Hub username (default in `docker-compose.yml` is `calebdavies03`) and password / Personal Access Token.
 
 > **Using a different Docker Hub username?**
 > - **PowerShell:** `$env:DOCKERHUB_USER="your-username"`
 > - **Bash:** `export DOCKERHUB_USER="your-username"`
 >
-> You can also permanently change the default `calebdaviess` in `docker-compose.yml`.
+> You can also permanently change the default `calebdavies03` in `docker-compose.yml`.
 
 ### 2. Build all 3 custom images locally
 
@@ -180,9 +179,9 @@ If testers may run on both Intel/AMD (`amd64`) and Apple Silicon M1–M4 (`arm64
 
 ```bash
 docker buildx create --use --name trust-builder || docker buildx use trust-builder
-docker buildx build --platform linux/amd64,linux/arm64 -t calebdaviess/trust-platform-engine:latest --push ./detection-engine
-docker buildx build --platform linux/amd64,linux/arm64 -t calebdaviess/trust-platform-api:latest --push ./accountability-service
-docker buildx build --platform linux/amd64,linux/arm64 -t calebdaviess/trust-platform-portal:latest --push ./player-portal
+docker buildx build --platform linux/amd64,linux/arm64 -t calebdavies03/trust-platform-engine:latest --push ./detection-engine
+docker buildx build --platform linux/amd64,linux/arm64 -t calebdavies03/trust-platform-api:latest --push ./accountability-service
+docker buildx build --platform linux/amd64,linux/arm64 -t calebdavies03/trust-platform-portal:latest --push ./player-portal
 ```
 
 ---

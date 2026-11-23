@@ -31,9 +31,10 @@ curl -fsSLO https://raw.githubusercontent.com/CalebDaviess/Diss-project-trust-pl
 ### 2. Pull the latest images & start the stack
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose up -d --pull always
 ```
+
+This pulls the newest public images from Docker Hub ([`calebdavies03`](https://hub.docker.com/u/calebdavies03)) and starts all 5 containers grouped under **`trust-platform`** in Docker Desktop.
 
 ### 3. Open the app
 Wait ~20 seconds on first start for PostgreSQL, Kafka, and Flyway migrations to finish, then open **http://localhost:5173**:
@@ -44,7 +45,7 @@ Wait ~20 seconds on first start for PostgreSQL, Kafka, and Flyway migrations to 
 | **ML Scorer (Swagger UI)** | http://localhost:8000/docs | FastAPI interactive docs for `POST /score` |
 | **Accountability API** | http://localhost:8081 | Quarkus REST API (runs in background behind the portal) |
 
-- **Update to the newest version anytime:** `docker compose pull && docker compose up -d`
+- **Update to the newest version anytime:** re-run `docker compose up -d --pull always`
 - **Stop containers:** `docker compose down` *(keeps database)* or `docker compose down -v` *(resets database)*
 - **Full Docker & Docker Hub guide:** see **[DOCKER_INSTRUCTIONS.md](DOCKER_INSTRUCTIONS.md)**
 

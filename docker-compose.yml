@@ -47,7 +47,7 @@ services:
 
   # ── 3. Conduct Detection Engine — Python / FastAPI / scikit-learn (background)
   detection-engine:
-    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-engine:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USER:-calebdavies03}/trust-platform-engine:${IMAGE_TAG:-latest}
     build:
       context: ./detection-engine
       dockerfile: Dockerfile
@@ -64,7 +64,7 @@ services:
 
   # ── 4. Accountability Service — Java / Quarkus REST API (background) ────────
   accountability-service:
-    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-api:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USER:-calebdavies03}/trust-platform-api:${IMAGE_TAG:-latest}
     build:
       context: ./accountability-service
       dockerfile: Dockerfile
@@ -98,7 +98,7 @@ services:
 
   # ── 5. Player Portal — React / Nginx Web UI (user-facing frontend) ──────────
   player-portal:
-    image: ${DOCKERHUB_USER:-calebdaviess}/trust-platform-portal:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USER:-calebdavies03}/trust-platform-portal:${IMAGE_TAG:-latest}
     build:
       context: ./player-portal
       dockerfile: Dockerfile
