@@ -25,7 +25,7 @@ When running, Docker Desktop shows a single grouped stack named **`trust-platfor
 ## Part 1: Running the App via Docker Hub (For Testers / Evaluators)
 
 ### Prerequisites
-- **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** (Windows / macOS) or Docker Engine + Docker Compose plugin (Linux), **running**.
+- **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** (Windows / macOS) or Docker Engine + Docker Compose plugin (Linux) — **make sure Docker Desktop is open and running before you run the first command below** (wait until it shows *Engine running*).
 
 ### Option A — Run with just `docker-compose.yml` (no source code needed)
 

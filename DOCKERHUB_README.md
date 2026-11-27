@@ -22,7 +22,7 @@ This image is part of a **5-container Docker Compose stack** (`trust-platform`):
 
 ## Quick Start (2 Commands — Only Docker Required)
 
-Make sure **Docker Desktop** (or Docker Engine + Compose) is running, then run:
+> **Prerequisite:** Install **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** and make sure **Docker Desktop is open and running before you run the first command below** (wait until it shows *Engine running*).
 
 ### 1. Download `docker-compose.yml`
 

@@ -13,7 +13,9 @@ detect conduct (own ML) + ingest cheat verdicts (external)
 
 ## Quick Start (Docker — Recommended)
 
-Try the full 5-container platform (Web UI, Quarkus API, Python ML engine, PostgreSQL, and Kafka) without installing Python, Java, Maven, or Node.js. **You only need [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.**
+Try the full 5-container platform (Web UI, Quarkus API, Python ML engine, PostgreSQL, and Kafka) without installing Python, Java, Maven, or Node.js.
+
+> **Prerequisite:** Install **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** and make sure **Docker Desktop is open and running before you run the first command below** (wait until the status indicator says *Engine running*).
 
 ### 1. Download `docker-compose.yml`
 Run in any empty folder (no need to clone the repository):
