@@ -86,7 +86,7 @@ Thumbs.db
 # ─────────────────────────────────────────────────────────────
 # Separate nested git repo (coursework assistant template) living in the tree
 coursework-template/
-# Survey instrument PDFs — kept out of the repo
-dissertation-vault/10-SurveyForms/
+# Survey instrument exemplar PDFs — kept out of the repo
+dissertation-vault/10-SurveyForms/*.pdf
 # Endpoint-DLP sidecar files
 *sec.endpointdlp
