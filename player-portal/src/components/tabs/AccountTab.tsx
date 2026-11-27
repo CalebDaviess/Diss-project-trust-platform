@@ -3,7 +3,6 @@ import {
   ApiError,
   getResult,
   listBans,
-  listConnections,
   type BanView,
   type CaseView,
   type ConnectionView,
@@ -28,6 +27,7 @@ import { GameLogo } from "../GameLogo";
 interface AccountTabProps {
   token: string;
   result: ResultView | null;
+  connections: ConnectionView[];
   profile?: ProfileView | null;
   loading: boolean;
   error: string | null;
@@ -211,6 +211,7 @@ function itemsFor(
 export function AccountTab({
   token,
   result,
+  connections,
   profile,
   loading,
   error,
@@ -225,8 +226,8 @@ export function AccountTab({
   const [scorePreview, setScorePreview] = useState<number | null>(null);
   const [comingOfAge, setComingOfAge] = useState(false);
   const [comeOfAgeError, setComeOfAgeError] = useState<string | null>(null);
-  const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [bans, setBans] = useState<BanView[]>([]);
+  const [bansLoaded, setBansLoaded] = useState(false);
   const [allCases, setAllCases] = useState<AnnotatedCase[]>([]);
 
   useEffect(() => {
@@ -240,14 +241,14 @@ export function AccountTab({
     let cancelled = false;
     void (async () => {
       try {
-        const [conns, banList] = await Promise.all([listConnections(token), listBans(token)]);
-        const perGameResults = await Promise.all(
-          conns.map((c) => getResult(token, c.connectionId).catch(() => null)),
-        );
+        const [banList, perGameResults] = await Promise.all([
+          listBans(token),
+          Promise.all(connections.map((c) => getResult(token, c.connectionId).catch(() => null))),
+        ]);
         const mergedCases: AnnotatedCase[] = [];
         perGameResults.forEach((res, idx) => {
           if (!res) return;
-          const conn = conns[idx];
+          const conn = connections[idx];
           for (const c of res.caseHistory) {
             mergedCases.push({
               ...c,
@@ -262,8 +263,8 @@ export function AccountTab({
         });
         mergedCases.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (!cancelled) {
-          setConnections(conns);
           setBans(banList);
+          setBansLoaded(true);
           setAllCases(mergedCases);
         }
       } catch (err) {
@@ -273,7 +274,7 @@ export function AccountTab({
     return () => {
       cancelled = true;
     };
-  }, [token, result]);
+  }, [token, result, connections]);
 
   if (error) {
     return <p className="alert alert--error" role="alert">{error}</p>;
@@ -303,8 +304,8 @@ export function AccountTab({
   const realValues: PreviewValues = {
     offences: m.confirmedOffences,
     open: openCasesAcrossGames,
-    games: m.linkedGames,
-    bans: m.activeBans,
+    games: connections.length,
+    bans: bansLoaded ? bans.length : m.activeBans,
   };
   const valueByCard = preview ?? realValues;
   const gaugeScore = scorePreview ?? m.trustScore;

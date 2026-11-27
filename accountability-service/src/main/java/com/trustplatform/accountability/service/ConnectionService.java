@@ -60,7 +60,9 @@ public class ConnectionService {
 
         // Re-link an existing (active) connection for the same game + provider rather than duplicating.
         GameConnection existing = gameConnectionRepository.listActiveByProfile(profileId).stream()
-                .filter(c -> c.gameId.equals(request.gameId()) && operatorId.equals(c.operatorId))
+                .filter(c -> c.gameId.equals(request.gameId())
+                        && (operatorId.equals(c.operatorId)
+                        || (request.provider() != null && request.provider().equalsIgnoreCase(c.provider))))
                 .findFirst()
                 .orElse(null);
 

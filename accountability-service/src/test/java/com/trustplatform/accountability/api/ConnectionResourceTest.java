@@ -57,6 +57,72 @@ class ConnectionResourceTest {
     }
 
     @Test
+    void linkedGamesCountTracksLinkBanAppealAndUnlinkExactly() {
+        String email = "reactive-" + java.util.UUID.randomUUID() + "@example.com";
+        String token = given()
+                .contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.RegisterRequest(email, "super-secret", "passport"))
+                .when().post("/auth/register").then().statusCode(200).extract().path("token");
+
+        // Fresh account starts with 0 linked games.
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/__overview__")
+                .then().statusCode(200).body("linkedGamesCount", is(0));
+
+        // Link first game -> count becomes 1 immediately.
+        String connA = given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new CreateConnectionRequest("gid-a", "Game A", "steam", "op-steam", "refA", null))
+                .when().post("/connections").then().statusCode(200).extract().path("connectionId");
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/" + connA)
+                .then().statusCode(200).body("linkedGamesCount", is(1));
+
+        // Link second game -> count becomes 2 immediately.
+        String connB = given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new CreateConnectionRequest("gid-b", "Game B", "riot", "op-riot", "refB", null))
+                .when().post("/connections").then().statusCode(200).extract().path("connectionId");
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/" + connB)
+                .then().statusCode(200).body("linkedGamesCount", is(2));
+
+        // Ban Game B -> stays linked (count stays 2).
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.SimulateBanRequest(connB, "temporary", 7, true))
+                .when().post("/dev/bans/simulate")
+                .then().statusCode(200).body("linkedGamesCount", is(2));
+
+        // Appeal Game B -> stays linked (count stays 2).
+        String appealId = given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.SubmitAppealRequest(connB, "mistake", "False positive ban.", 0))
+                .when().post("/appeals").then().statusCode(200).extract().path("appealId");
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/" + connB)
+                .then().statusCode(200).body("linkedGamesCount", is(2));
+
+        // Approve appeal on Game B -> still linked (count stays 2).
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.ResolveAppealRequest("approved", "Overturned."))
+                .when().post("/appeals/" + appealId + "/resolve").then().statusCode(200);
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/" + connB)
+                .then().statusCode(200).body("linkedGamesCount", is(2));
+
+        // Unlink Game B -> count drops to 1 immediately.
+        given().header("Authorization", "Bearer " + token)
+                .when().delete("/connections/" + connB).then().statusCode(204);
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/" + connA)
+                .then().statusCode(200).body("linkedGamesCount", is(1));
+
+        // Unlink Game A -> count drops to 0 immediately.
+        given().header("Authorization", "Bearer " + token)
+                .when().delete("/connections/" + connA).then().statusCode(204);
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/results/__overview__")
+                .then().statusCode(200).body("linkedGamesCount", is(0));
+    }
+
+    @Test
     void relinkingSameGameDoesNotDuplicate() {
         String token = login();
         var request = new CreateConnectionRequest("570", "Dota 2", "steam", "op-steam", "Player#9", null);

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { listActivity, type ActivityItem, type ResultView } from "../../api/accountabilityApi";
+import { listActivity, type ActivityItem, type ConnectionView, type ResultView } from "../../api/accountabilityApi";
 import { activityKind, formatDateTime, formatRelativeTime, sourceLabel } from "../../features/activity";
 import { deriveMetrics, trustTrend } from "../../features/metrics";
 import type { StatCardKey } from "../../features/mascotState";
@@ -12,6 +12,7 @@ import { GameLogo } from "../GameLogo";
 interface DashboardTabProps {
   token: string;
   result: ResultView | null;
+  connections: ConnectionView[];
   appealableCount?: number;
   loading: boolean;
   error: string | null;
@@ -44,6 +45,7 @@ function MetricCard({ label, value, caption, chart, tone = "accent" }: MetricCar
 export function DashboardTab({
   token,
   result,
+  connections,
   appealableCount = 0,
   loading,
   error,
@@ -148,7 +150,7 @@ export function DashboardTab({
         <StatCard
           card="games"
           label="Linked games"
-          value={m.linkedGames}
+          value={connections.length}
           onOpen={() => onNavigate("games")}
         />
       </section>

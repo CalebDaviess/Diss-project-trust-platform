@@ -258,6 +258,8 @@ export function emptyResult(connectionId: string): ResultView {
   return {
     gameConnectionId: connectionId,
     globalTrustScore: 100,
+    linkedGamesCount: 0,
+    activeBanCount: 0,
     conductScore: null,
     status: null,
     crossGameSignals: [],

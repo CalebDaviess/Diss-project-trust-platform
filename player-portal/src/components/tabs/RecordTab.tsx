@@ -4,7 +4,6 @@ import {
   listActivity,
   listAppeals,
   listBans,
-  listConnections,
   type ActivityItem,
   type AppealableSanction,
   type BanView,
@@ -26,6 +25,7 @@ import { AppealModal } from "../AppealModal";
 
 interface RecordTabProps {
   token: string;
+  connections: ConnectionView[];
   initialGameFilter?: string;
   /** Called after an appeal is submitted so other tabs (trust score) can refresh. */
   onChanged?: () => void;
@@ -41,9 +41,8 @@ const CATEGORIES: Array<{ id: ActivityCategory; label: string }> = [
 ];
 
 /** My Record: a unified, cross-game activity feed with game + category filters and inline appeal access. */
-export function RecordTab({ token, initialGameFilter = "", onChanged, onNavigate }: RecordTabProps) {
+export function RecordTab({ token, connections, initialGameFilter = "", onChanged, onNavigate }: RecordTabProps) {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [appealable, setAppealable] = useState<AppealableSanction[]>([]);
   const [bans, setBans] = useState<BanView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,18 +56,22 @@ export function RecordTab({ token, initialGameFilter = "", onChanged, onNavigate
     setGameFilter(initialGameFilter);
   }, [initialGameFilter]);
 
+  useEffect(() => {
+    if (gameFilter && !connections.some((c) => c.connectionId === gameFilter)) {
+      setGameFilter("");
+    }
+  }, [connections, gameFilter]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [act, conns, appeals, banList] = await Promise.all([
+      const [act, appeals, banList] = await Promise.all([
         listActivity(token),
-        listConnections(token),
         listAppeals(token),
         listBans(token),
       ]);
       setActivity(act);
-      setConnections(conns);
       setAppealable(appeals.appealable);
       setBans(banList);
     } catch (err) {

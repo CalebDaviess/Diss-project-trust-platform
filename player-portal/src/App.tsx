@@ -12,6 +12,7 @@ import {
   simulateBan,
   submitSample,
   verifyAdult,
+  type ConnectionView,
   type ProfileView,
   type RegisterRequest,
   type ResultView,
@@ -31,8 +32,8 @@ import { AccountTab } from "./components/tabs/AccountTab";
 import { ConceptTab } from "./components/tabs/ConceptTab";
 import "./App.css";
 
-/** Connection auto-loaded into the dashboard the moment a player signs in. */
-const DEFAULT_CONNECTION = "gc-1";
+/** Non-colliding overview path when an account currently has no linked games. */
+const DEFAULT_CONNECTION = "__overview__";
 const SESSION_KEY = "trust_platform_session_v1";
 
 interface SavedSession {
@@ -92,6 +93,9 @@ export default function App() {
   const [accountFocusCard, setAccountFocusCard] = useState<StatCardKey | null>(null);
   const [recordGameFilter, setRecordGameFilter] = useState<string>("");
 
+  /** Single source of truth for linked games across Games, Dashboard, Account, Record, and sidebar. */
+  const [connections, setConnections] = useState<ConnectionView[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [result, setResult] = useState<ResultView | null>(null);
   const [profile, setProfile] = useState<ProfileView | null>(null);
   const [appealableCount, setAppealableCount] = useState(0);
@@ -103,6 +107,8 @@ export default function App() {
     writeSavedSession(null);
     setToken(null);
     setSignedInAs("");
+    setConnections([]);
+    setConnectionsLoading(false);
     setResult(null);
     setProfile(null);
     setAppealableCount(0);
@@ -132,35 +138,52 @@ export default function App() {
     }
   }, []);
 
-  /** Initial post-sign-in load: pick the player's first active game connection, or fall back cleanly. */
-  const loadInitial = useCallback(
-    async (activeToken: string) => {
-      setLoading(true);
+  /**
+   * Load/reconcile connections, shared ResultView, profile, and appeal counts.
+   * When `silent` is true, updates smoothly in the background without flashing loading skeletons.
+   */
+  const loadAccountData = useCallback(
+    async (activeToken: string, opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+      if (!silent) {
+        setLoading(true);
+        setConnectionsLoading(true);
+      }
       setError(null);
       void loadProfile(activeToken);
       void loadAppealCounts(activeToken);
+
+      let activeConnections: ConnectionView[] = [];
       let targetConnection = DEFAULT_CONNECTION;
       try {
-        const conns = await listConnections(activeToken);
-        if (conns.length > 0) {
-          targetConnection = conns[0].connectionId;
+        activeConnections = await listConnections(activeToken);
+        setConnections(activeConnections);
+        if (activeConnections.length > 0) {
+          targetConnection = activeConnections[0].connectionId;
         }
-      } catch {
-        // Fall back to DEFAULT_CONNECTION if connections list isn't reachable yet.
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          handleSignOut();
+          return;
+        }
+      } finally {
+        if (!silent) setConnectionsLoading(false);
       }
+
       try {
-        setResult(await getResult(activeToken, targetConnection));
+        const fetched = await getResult(activeToken, targetConnection);
+        setResult({ ...fetched, linkedGamesCount: activeConnections.length });
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
-          setResult(emptyResult(targetConnection));
+          setResult({ ...emptyResult(targetConnection), linkedGamesCount: activeConnections.length });
         } else if (err instanceof ApiError && err.status === 401) {
           handleSignOut();
         } else {
-          setResult(emptyResult(targetConnection));
+          setResult({ ...emptyResult(targetConnection), linkedGamesCount: activeConnections.length });
           setError(messageFor(err));
         }
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [handleSignOut, loadAppealCounts, loadProfile],
@@ -169,13 +192,12 @@ export default function App() {
   // Hydrate dashboard state if restoring an existing browser session across refresh.
   useEffect(() => {
     if (saved?.token) {
-      void loadInitial(saved.token);
+      void loadAccountData(saved.token);
     }
-  }, [saved, loadInitial]);
+  }, [saved, loadAccountData]);
 
-  /** Run an authenticated data action, refreshing the shared ResultView + sidebar badges. */
+  /** Run an authenticated mutation, refreshing the shared ResultView + sidebar badges. */
   async function runWith(activeToken: string, action: (t: string) => Promise<ResultView>): Promise<ResultView | null> {
-    setLoading(true);
     setError(null);
     try {
       const updated = await action(activeToken);
@@ -188,8 +210,6 @@ export default function App() {
       }
       setError(messageFor(err));
       throw err;
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -202,7 +222,7 @@ export default function App() {
       setToken(auth.token);
       setSignedInAs(username);
       setActiveTab("dashboard");
-      void loadInitial(auth.token);
+      void loadAccountData(auth.token);
     } catch (err) {
       setAuthError(
         err instanceof ApiError && err.status === 401
@@ -223,7 +243,7 @@ export default function App() {
       setToken(auth.token);
       setSignedInAs(request.username);
       setActiveTab("dashboard");
-      void loadInitial(auth.token);
+      void loadAccountData(auth.token);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setAuthError("An account with this email already exists. Try signing in.");
@@ -254,9 +274,31 @@ export default function App() {
   function handleSimulateBan(request: SimulateBanRequest) {
     return run((t) => simulateBan(t, request));
   }
-  /** Reload the shared result so trust/record changes (e.g. appeal outcomes) show on other tabs. */
+
+  /** Immediately reflect a newly linked game everywhere (Games, Dashboard, Account, Record, sidebar). */
+  function handleConnectionLinked(created: ConnectionView) {
+    setConnections((prev) => {
+      const next = [created, ...prev.filter((c) => c.connectionId !== created.connectionId)];
+      setResult((r) => (r ? { ...r, linkedGamesCount: next.length } : r));
+      return next;
+    });
+    if (token) void loadAccountData(token, { silent: true });
+  }
+
+  /** Immediately remove an unlinked game everywhere (Games, Dashboard, Account, Record, sidebar). */
+  function handleConnectionUnlinked(connectionId: string) {
+    setConnections((prev) => {
+      const next = prev.filter((c) => c.connectionId !== connectionId);
+      setResult((r) => (r ? { ...r, linkedGamesCount: next.length } : r));
+      return next;
+    });
+    setRecordGameFilter((prev) => (prev === connectionId ? "" : prev));
+    if (token) void loadAccountData(token, { silent: true });
+  }
+
+  /** Silent background reconciliation after appeals / record mutations. */
   function refreshResult() {
-    if (token) void loadInitial(token);
+    if (token) void loadAccountData(token, { silent: true });
   }
 
   /** Smart cross-tab jump (optionally opening an Account detail modal or pre-filtering My Record). */
@@ -291,8 +333,8 @@ export default function App() {
   }
 
   const badges: Partial<Record<TabKey, NavBadge>> = {};
-  if ((result?.linkedGamesCount ?? 0) > 0) {
-    badges.games = { count: result!.linkedGamesCount!, tone: "muted" };
+  if (connections.length > 0) {
+    badges.games = { count: connections.length, tone: "muted" };
   }
   if ((result?.activeBanCount ?? 0) > 0) {
     badges.record = { count: result!.activeBanCount!, tone: "bad" };
@@ -317,6 +359,7 @@ export default function App() {
         <DashboardTab
           token={token}
           result={result}
+          connections={connections}
           appealableCount={appealableCount}
           loading={loading}
           error={error}
@@ -326,6 +369,7 @@ export default function App() {
       {activeTab === "record" && (
         <RecordTab
           token={token}
+          connections={connections}
           initialGameFilter={recordGameFilter}
           onChanged={refreshResult}
           onNavigate={navigateTo}
@@ -335,7 +379,11 @@ export default function App() {
         <GamesTab
           token={token}
           profile={profile}
-          onChanged={refreshResult}
+          connections={connections}
+          loading={connectionsLoading}
+          onConnectionLinked={handleConnectionLinked}
+          onConnectionUnlinked={handleConnectionUnlinked}
+          onRefresh={refreshResult}
           onNavigate={navigateTo}
           onSubmitSample={handleSubmitSample}
           onSimulateAntiCheat={handleSimulateAntiCheat}
@@ -349,6 +397,7 @@ export default function App() {
         <AccountTab
           token={token}
           result={result}
+          connections={connections}
           profile={profile}
           loading={loading}
           error={error}

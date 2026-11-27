@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   createConnection,
-  listConnections,
   removeConnection,
   searchGames,
   type ConnectionView,
@@ -23,7 +22,11 @@ import { GameLogo } from "../GameLogo";
 interface GamesTabProps {
   token: string;
   profile?: ProfileView | null;
-  onChanged?: () => void;
+  connections: ConnectionView[];
+  loading: boolean;
+  onConnectionLinked: (created: ConnectionView) => void;
+  onConnectionUnlinked: (connectionId: string) => void;
+  onRefresh?: () => void;
   onNavigate?: (tab: TabKey, opts?: { gameFilter?: string }) => void;
   onSubmitSample: (submission: SampleSubmission) => Promise<ResultView | null>;
   onSimulateAntiCheat: (request: SimulateAntiCheatRequest) => Promise<ResultView | null>;
@@ -134,14 +137,16 @@ function BanSimControl({
 export function GamesTab({
   token,
   profile,
-  onChanged,
+  connections,
+  loading,
+  onConnectionLinked,
+  onConnectionUnlinked,
+  onRefresh,
   onNavigate,
   onSubmitSample,
   onSimulateAntiCheat,
   onSimulateBan,
 }: GamesTabProps) {
-  const [connections, setConnections] = useState<ConnectionView[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -149,23 +154,6 @@ export function GamesTab({
   const [addOpen, setAddOpen] = useState(false);
 
   const blockMature = (profile?.guardianControlled ?? false) && !(profile?.matureAccessAllowed ?? true);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setConnections(await listConnections(token));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load your games.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
   const linkedGameIds = useMemo(() => new Set(connections.map((c) => c.gameId)), [connections]);
 
   async function handleUnlink(c: ConnectionView) {
@@ -175,12 +163,11 @@ export function GamesTab({
     setBusyId(c.connectionId);
     try {
       await removeConnection(token, c.connectionId);
-      setConnections((prev) => prev.filter((item) => item.connectionId !== c.connectionId));
-      onChanged?.();
+      onConnectionUnlinked(c.connectionId);
       setNotice({ text: `${c.gameName} was unlinked from your identity.` });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not unlink game. Please try again.");
-      void reload();
+      onRefresh?.();
     } finally {
       setBusyId(null);
     }
@@ -400,11 +387,10 @@ export function GamesTab({
           blockMature={blockMature}
           linkedGameIds={linkedGameIds}
           onClose={() => setAddOpen(false)}
-          onLinked={(gameName) => {
+          onLinked={(created) => {
             setAddOpen(false);
-            setNotice({ text: `${gameName} is now linked to your identity.` });
-            void reload();
-            onChanged?.();
+            onConnectionLinked(created);
+            setNotice({ text: `${created.gameName} is now linked to your identity.` });
           }}
         />
       )}
@@ -423,7 +409,7 @@ function AddGameModal({
   blockMature: boolean;
   linkedGameIds: Set<string>;
   onClose: () => void;
-  onLinked: (gameName: string) => void;
+  onLinked: (created: ConnectionView) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GameSearchResult[]>([]);
@@ -480,9 +466,9 @@ function AddGameModal({
       return;
     }
     setConnecting(true);
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 600));
     try {
-      await createConnection(token, {
+      const created = await createConnection(token, {
         gameId: selected.id,
         gameName: selected.name,
         provider,
@@ -491,7 +477,7 @@ function AddGameModal({
         imageUrl: selected.imageUrl ?? undefined,
         mature: isMatureGame(selected.name),
       });
-      onLinked(selected.name);
+      onLinked(created);
     } catch (err) {
       setConnecting(false);
       if (err instanceof ApiError && err.status === 403) {
