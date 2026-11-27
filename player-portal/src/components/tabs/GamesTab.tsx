@@ -8,21 +8,24 @@ import {
   type ConnectionView,
   type GameSearchResult,
   type ProfileView,
+  type ResultView,
   type SampleSubmission,
   type SimulateAntiCheatRequest,
   type SimulateBanRequest,
 } from "../../api/accountabilityApi";
 import { TOXIC_CHAT } from "../../features/presets";
 import { isMatureGame } from "../../features/maturity";
+import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
 import { StatDetailDialog } from "../StatDetailDialog";
 import { GameLogo } from "../GameLogo";
 
 interface GamesTabProps {
   token: string;
   profile?: ProfileView | null;
-  onSubmitSample: (submission: SampleSubmission) => void;
-  onSimulateAntiCheat: (request: SimulateAntiCheatRequest) => void;
-  onSimulateBan: (request: SimulateBanRequest) => void;
+  onChanged?: () => void;
+  onSubmitSample: (submission: SampleSubmission) => Promise<ResultView | null>;
+  onSimulateAntiCheat: (request: SimulateAntiCheatRequest) => Promise<ResultView | null>;
+  onSimulateBan: (request: SimulateBanRequest) => Promise<ResultView | null>;
 }
 
 interface Provider {
@@ -80,15 +83,17 @@ const BAN_OPTIONS: Array<{ label: string; req: Omit<SimulateBanRequest, "connect
 /** Dev-only control: pick a ban type/duration/appealability and apply it to this game. */
 function BanSimControl({
   connectionId,
+  disabled,
   onSimulateBan,
 }: {
   connectionId: string;
+  disabled?: boolean;
   onSimulateBan: (request: SimulateBanRequest) => void;
 }) {
   const [idx, setIdx] = useState(0);
   return (
     <span className="bansim">
-      <select className="bansim__select" value={idx} onChange={(e) => setIdx(Number(e.target.value))} aria-label="Ban type">
+      <select className="bansim__select" value={idx} onChange={(e) => setIdx(Number(e.target.value))} aria-label="Ban type" disabled={disabled}>
         {BAN_OPTIONS.map((o, i) => (
           <option key={i} value={i}>{o.label}</option>
         ))}
@@ -97,6 +102,7 @@ function BanSimControl({
         type="button"
         className="btn btn--ghost btn--sm btn--demo"
         title="Dev: simulate a typed operator ban on this game"
+        disabled={disabled}
         onClick={() => onSimulateBan({ connectionId, ...BAN_OPTIONS[idx].req })}
       >
         Simulate ban
@@ -105,10 +111,12 @@ function BanSimControl({
   );
 }
 
-export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, onSimulateBan }: GamesTabProps) {
+export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulateAntiCheat, onSimulateBan }: GamesTabProps) {
   const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
   // Guardian-controlled minor without 18+ consent: 18+ games are blocked.
@@ -131,11 +139,33 @@ export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, 
   }, [reload]);
 
   async function handleUnlink(connectionId: string) {
+    setError(null);
+    setNotice(null);
+    setBusyId(connectionId);
     try {
       await removeConnection(token, connectionId);
       setConnections((prev) => prev.filter((c) => c.connectionId !== connectionId));
-    } catch {
+      onChanged?.();
+      setNotice("Game unlinked from your identity.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not unlink game. Please try again.");
       void reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function runDemoAction(connectionId: string, action: () => Promise<ResultView | null>, successMessage: (r: ResultView | null) => string) {
+    setError(null);
+    setNotice(null);
+    setBusyId(connectionId);
+    try {
+      const updated = await action();
+      setNotice(successMessage(updated));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed. Check that the backend and detection engine are running.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -146,11 +176,27 @@ export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, 
       gameId: c.gameId,
       features: TOXIC_CHAT.features,
     };
-    onSubmitSample(submission);
+    void runDemoAction(
+      c.connectionId,
+      () => onSubmitSample(submission),
+      (r) => `Conduct sample scored for ${c.gameName}${r?.conductScore != null ? ` (score ${r.conductScore}, status: ${r.status ?? "pending"})` : ""} — view in My Record.`,
+    );
   }
 
   function simulateAntiCheat(c: ConnectionView) {
-    onSimulateAntiCheat({ connectionId: c.connectionId, operatorId: c.operatorId, gameId: c.gameId });
+    void runDemoAction(
+      c.connectionId,
+      () => onSimulateAntiCheat({ connectionId: c.connectionId, operatorId: c.operatorId, gameId: c.gameId }),
+      (r) => `External anti-cheat verdict ingested for ${c.gameName}${r ? ` (global trust now ${r.globalTrustScore}/100)` : ""} — view in My Record or Appeals.`,
+    );
+  }
+
+  function handleSimBan(c: ConnectionView, req: SimulateBanRequest) {
+    void runDemoAction(
+      c.connectionId,
+      () => onSimulateBan(req),
+      (r) => `Simulated ${req.banType} ban applied on ${c.gameName}${r ? ` (global trust now ${r.globalTrustScore}/100)` : ""} — view in My Record or Account.`,
+    );
   }
 
   return (
@@ -169,6 +215,7 @@ export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, 
       </section>
 
       {error && <p className="alert alert--error" role="alert">{error}</p>}
+      {notice && <p className="alert" role="status">{notice}</p>}
 
       {loading ? (
         <div className="panel panel--empty"><p className="muted">Loading your games…</p></div>
@@ -193,18 +240,18 @@ export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, 
                 </span>
               </div>
               <div className="gamecard__actions">
-                {import.meta.env.DEV && (
+                {DEMO_CONTROLS_ENABLED && (
                   <>
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => simulateToxic(c)} title="Dev: submit a toxic conduct sample for this game">
+                    <button type="button" className="btn btn--ghost btn--sm" disabled={busyId === c.connectionId} onClick={() => simulateToxic(c)} title="Demo: submit a toxic conduct sample for this game">
                       Simulate report
                     </button>
-                    <button type="button" className="btn btn--ghost btn--sm btn--demo" onClick={() => simulateAntiCheat(c)} title="Dev: land a simulated anti-cheat verdict for this game">
+                    <button type="button" className="btn btn--ghost btn--sm btn--demo" disabled={busyId === c.connectionId} onClick={() => simulateAntiCheat(c)} title="Demo: land a simulated anti-cheat verdict for this game">
                       Simulate anti-cheat
                     </button>
-                    <BanSimControl connectionId={c.connectionId} onSimulateBan={onSimulateBan} />
+                    <BanSimControl connectionId={c.connectionId} disabled={busyId === c.connectionId} onSimulateBan={(req) => handleSimBan(c, req)} />
                   </>
                 )}
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => handleUnlink(c.connectionId)}>
+                <button type="button" className="btn btn--ghost btn--sm" disabled={busyId === c.connectionId} onClick={() => handleUnlink(c.connectionId)}>
                   Unlink
                 </button>
               </div>
@@ -220,7 +267,9 @@ export function GamesTab({ token, profile, onSubmitSample, onSimulateAntiCheat, 
           onClose={() => setAddOpen(false)}
           onLinked={() => {
             setAddOpen(false);
+            setNotice("Game linked to your identity.");
             void reload();
+            onChanged?.();
           }}
         />
       )}
@@ -311,6 +360,8 @@ function AddGameModal({
       if (err instanceof ApiError && err.status === 403) {
         setSelected(null);
         setSearchError("This game is rated 18+ and is blocked on this parent-controlled account.");
+      } else {
+        setSearchError(err instanceof ApiError ? err.message : "Could not link this game. Please try again.");
       }
     }
   }
@@ -365,6 +416,7 @@ function AddGameModal({
               )}
             </button>
           )}
+          {searchError && <p className="alert alert--error" role="alert">{searchError}</p>}
           <p className="muted addgame__note">Prototype: the publisher sign-in is simulated — nothing is sent to {providerLabelText}.</p>
         </div>
       ) : (

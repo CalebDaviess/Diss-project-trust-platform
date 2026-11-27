@@ -118,7 +118,7 @@ public class DemoHistorySeeder {
 
         // Trust-over-time series so the dashboard trend graph shows real historical drops.
         if (trustHistoryRepository.count("profileId", profileId) == 0) {
-            recordTrustPoint(profileId, fourteenDaysAgo, 100, "account-created");
+            recordTrustPoint(profileId, fourteenDaysAgo, 100, "account_created");
             recordTrustPoint(profileId, sixDaysAgo, 80, "anti-cheat");
             recordTrustPoint(profileId, twoDaysAgo, 62, "ban");
         }
@@ -151,7 +151,7 @@ public class DemoHistorySeeder {
 
         // 2) Counter-Strike 2 — external anti-cheat verdict (CONFIRMED) + active appealable temp ban
         GameConnection cs2 = createConnection(
-                DEMO_CONN_CS2, profile, "steam", "steam:730",
+                DEMO_CONN_CS2, profile, "steam", "730",
                 "Counter-Strike 2", "steam", "demo_cs2_76561198000", null, fourteenDaysAgo);
 
         if (antiCheatVerdictRepository.findById(DEMO_VERDICT_ID) == null) {

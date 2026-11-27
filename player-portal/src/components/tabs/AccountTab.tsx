@@ -12,6 +12,7 @@ import {
 import { deriveMetrics, trustTrend, verdictLabel } from "../../features/metrics";
 import { mascotStateFor, type StatCardKey } from "../../features/mascotState";
 import { banExtent, banTypeLabel } from "../../features/bans";
+import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
 import { Sparkline, TrustGauge } from "../viz/charts";
 import { TrustHistoryChart } from "../viz/TrustHistoryChart";
 import { StatCard } from "../viz/StatCard";
@@ -173,6 +174,7 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   const [preview, setPreview] = useState<PreviewValues | null>(null);
   const [scorePreview, setScorePreview] = useState<number | null>(null);
   const [comingOfAge, setComingOfAge] = useState(false);
+  const [comeOfAgeError, setComeOfAgeError] = useState<string | null>(null);
   const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [bans, setBans] = useState<BanView[]>([]);
 
@@ -233,9 +235,12 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   async function handleComeOfAge() {
     if (comingOfAge || !onComeOfAge) return;
     setComingOfAge(true);
+    setComeOfAgeError(null);
     await new Promise((r) => setTimeout(r, 2000));
     try {
       await onComeOfAge();
+    } catch (err) {
+      setComeOfAgeError(err instanceof ApiError ? err.message : "Could not verify ID right now. Please try again.");
     } finally {
       setComingOfAge(false);
     }
@@ -306,6 +311,7 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
                     {comingOfAge ? "Verifying your ID…" : "Verify my ID & unlock full access"}
                   </button>
                 </div>
+                {comeOfAgeError && <p className="alert alert--error" role="alert">{comeOfAgeError}</p>}
               </div>
             ) : (
               <p className="muted accesscard__note">
@@ -324,7 +330,7 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
         <StatCard card="bans" label="Active bans" value={valueByCard.bans} onOpen={() => setOpenCard("bans")} />
       </section>
 
-      {import.meta.env.DEV && (
+      {DEMO_CONTROLS_ENABLED && (
         <DevTierPreview
           value={preview}
           realValues={realValues}

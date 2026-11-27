@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IdDocumentType, RegisterRequest } from "../api/accountabilityApi";
 import { ThemeToggle } from "./ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
@@ -60,6 +60,12 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
   const [localError, setLocalError] = useState<string | null>(null);
   const uploadTimer = useRef<number | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (uploadTimer.current) window.clearTimeout(uploadTimer.current);
+    };
+  }, []);
+
   const selectedId = ID_TYPES.find((t) => t.value === idType) ?? ID_TYPES[0];
   // In adult mode the document is the holder's; in guardian mode it is the parent/guardian's.
   const verifySubject = over18 ? "your" : "the guardian's";
@@ -100,8 +106,9 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
       setUploading(false);
       if (age < 18) {
         if (over18) {
-          setLocalError("Your ID shows you are under 18. Switch to “Under 18” and add a parent or guardian.");
-          setOver(false);
+          setOver18(false);
+          setIdUploaded(false);
+          setLocalError("Your ID shows you are under 18. Switched to “Under 18” — please add a parent or guardian.");
         } else {
           setLocalError("The guardian's ID shows they are under 18. A guardian must be a verified adult.");
         }
@@ -362,6 +369,7 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
                     <input
                       type="date"
                       value={dobOnId}
+                      max={new Date().toISOString().slice(0, 10)}
                       onChange={(e) => {
                         setDobOnId(e.target.value);
                         setIdUploaded(false);

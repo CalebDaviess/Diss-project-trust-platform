@@ -41,9 +41,15 @@ $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $dockerCmd) {
     Write-Warn "Docker not found on PATH - Quarkus Dev Services cannot start Postgres/Kafka."
 } else {
-    $null = & docker info 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn "Docker daemon is not running. Start Docker Desktop so Quarkus Dev Services can boot Postgres + Kafka."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & docker info *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Docker daemon is not running. Start Docker Desktop so Quarkus Dev Services can boot Postgres + Kafka."
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
 }
 
@@ -164,8 +170,8 @@ function Start-ServiceProcess([string]$Name, [ConsoleColor]$Color, [string]$Work
 
 try {
     Start-ServiceProcess -Name "engine" -Color Cyan -WorkDir $engineDir `
-        -FilePath $venvUvicorn `
-        -Arguments "detection_engine.app:app --host 127.0.0.1 --port $EnginePort $reloadArgs" | Out-Null
+        -FilePath $venvPy `
+        -Arguments "-m uvicorn detection_engine.app:app --host 127.0.0.1 --port $EnginePort $reloadArgs" | Out-Null
 
     $apiEnv = @{
         "DETECTION_ENGINE_URL" = "http://127.0.0.1:$EnginePort"

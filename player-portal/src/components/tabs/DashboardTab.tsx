@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { ResultView } from "../../api/accountabilityApi";
+import { useEffect, useState, type ReactNode } from "react";
+import { listActivity, type ActivityItem, type ResultView } from "../../api/accountabilityApi";
 import { deriveMetrics, trustTrend } from "../../features/metrics";
 import { Sparkline, TrustGauge } from "../viz/charts";
 import { TrustHistoryChart } from "../viz/TrustHistoryChart";
@@ -44,6 +44,22 @@ function formatTimestamp(iso: string): string {
 }
 
 export function DashboardTab({ token, result, loading, error, onOpenAccount }: DashboardTabProps) {
+  const [activity, setActivity] = useState<ActivityItem[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listActivity(token)
+      .then((items) => {
+        if (!cancelled) setActivity(items);
+      })
+      .catch(() => {
+        if (!cancelled) setActivity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, result]);
+
   if (error) {
     return <p className="alert alert--error" role="alert">{error}</p>;
   }
@@ -57,7 +73,14 @@ export function DashboardTab({ token, result, loading, error, onOpenAccount }: D
 
   const m = deriveMetrics(result);
   const trend = trustTrend(m.trustScore);
-  const recentActivity = [...result.auditTrail].reverse().slice(0, 6);
+  const recentActivity = (activity && activity.length > 0
+    ? activity.slice(0, 6).map((a) => ({
+        occurredAt: a.occurredAt,
+        source: a.source,
+        action: a.gameName ? `${a.action} · ${a.gameName}` : a.action,
+        actor: a.actor,
+      }))
+    : [...result.auditTrail].reverse().slice(0, 6));
 
   return (
     <div className="dash">

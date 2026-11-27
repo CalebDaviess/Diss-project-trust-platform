@@ -7,6 +7,7 @@ import {
   type AppealableSanction,
 } from "../../api/accountabilityApi";
 import { sourceLabel } from "../../features/activity";
+import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
 import { GameLogo } from "../GameLogo";
 import { AppealModal } from "../AppealModal";
 
@@ -54,13 +55,15 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
 
   async function resolve(appealId: string, decision: "approved" | "denied") {
     setResolving(appealId);
+    setError(null);
     try {
       // No note passed: the operator/reviewer decides the wording. In the demo the backend fills a
       // representative reason (random on a denial), mirroring an operator leaving a comment.
       await resolveAppeal(token, appealId, decision);
       await reload();
       onChanged?.();
-    } catch {
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not resolve appeal. Please try again.");
       await reload();
     } finally {
       setResolving(null);
@@ -140,7 +143,7 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
                       <p className="muted appeal-card__decision">Reviewer: {a.decisionNote}</p>
                     )}
                   </div>
-                  {import.meta.env.DEV && a.status === "submitted" && (
+                  {DEMO_CONTROLS_ENABLED && a.status === "submitted" && (
                     <div className="appeal-card__resolve">
                       <span className="muted appeal-card__devlabel">Simulate studio review:</span>
                       <button type="button" className="btn btn--ghost btn--sm" disabled={resolving === a.appealId} onClick={() => resolve(a.appealId, "approved")}>

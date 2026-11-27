@@ -4,6 +4,7 @@ import {
   emptyResult,
   getProfile,
   getResult,
+  listConnections,
   login,
   register,
   simulateAntiCheatVerdict,
@@ -67,21 +68,30 @@ export default function App() {
     }
   }
 
-  /** Initial post-sign-in load: tolerant of a brand-new account that has no record yet. */
+  /** Initial post-sign-in load: pick the player's first active game connection, or fall back cleanly. */
   async function loadInitial(activeToken: string) {
     setLoading(true);
     setError(null);
     void loadProfile(activeToken);
+    let targetConnection = DEFAULT_CONNECTION;
     try {
-      setResult(await getResult(activeToken, DEFAULT_CONNECTION));
+      const conns = await listConnections(activeToken);
+      if (conns.length > 0) {
+        targetConnection = conns[0].connectionId;
+      }
+    } catch {
+      // Fall back to DEFAULT_CONNECTION if connections list isn't reachable yet.
+    }
+    try {
+      setResult(await getResult(activeToken, targetConnection));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // New account: the default game connection isn't theirs yet — show a clean empty record.
-        setResult(emptyResult(DEFAULT_CONNECTION));
+        // New account: no game connection yet — show a clean empty record.
+        setResult(emptyResult(targetConnection));
       } else if (err instanceof ApiError && err.status === 401) {
         handleSignOut();
       } else {
-        setResult(emptyResult(DEFAULT_CONNECTION));
+        setResult(emptyResult(targetConnection));
         setError(messageFor(err));
       }
     } finally {
@@ -90,16 +100,19 @@ export default function App() {
   }
 
   /** Run an authenticated data action, refreshing the shared ResultView. */
-  async function runWith(activeToken: string, action: (t: string) => Promise<ResultView>) {
+  async function runWith(activeToken: string, action: (t: string) => Promise<ResultView>): Promise<ResultView | null> {
     setLoading(true);
     setError(null);
     try {
-      setResult(await action(activeToken));
+      const updated = await action(activeToken);
+      setResult(updated);
+      return updated;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         handleSignOut();
       }
       setError(messageFor(err));
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -156,22 +169,22 @@ export default function App() {
     setAuthError(null);
   }
 
-  function run(action: (t: string) => Promise<ResultView>) {
+  async function run(action: (t: string) => Promise<ResultView>): Promise<ResultView | null> {
     if (!token) {
       setError("Please sign in first.");
-      return;
+      return null;
     }
-    void runWith(token, action);
+    return runWith(token, action);
   }
 
   function handleSubmitSample(submission: SampleSubmission) {
-    run((t) => submitSample(t, submission));
+    return run((t) => submitSample(t, submission));
   }
   function handleSimulateAntiCheat(request: SimulateAntiCheatRequest) {
-    run((t) => simulateAntiCheatVerdict(t, request));
+    return run((t) => simulateAntiCheatVerdict(t, request));
   }
   function handleSimulateBan(request: SimulateBanRequest) {
-    run((t) => simulateBan(t, request));
+    return run((t) => simulateBan(t, request));
   }
   /** Reload the shared result so trust/record changes (e.g. appeal outcomes) show on other tabs. */
   function refreshResult() {
@@ -222,6 +235,7 @@ export default function App() {
         <GamesTab
           token={token}
           profile={profile}
+          onChanged={refreshResult}
           onSubmitSample={handleSubmitSample}
           onSimulateAntiCheat={handleSimulateAntiCheat}
           onSimulateBan={handleSimulateBan}

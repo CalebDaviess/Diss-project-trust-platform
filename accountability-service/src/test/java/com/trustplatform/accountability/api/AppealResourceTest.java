@@ -4,6 +4,7 @@ import com.trustplatform.accountability.dto.AuthRequest;
 import com.trustplatform.accountability.dto.CreateConnectionRequest;
 import com.trustplatform.accountability.dto.ResolveAppealRequest;
 import com.trustplatform.accountability.dto.SimulateAntiCheatRequest;
+import com.trustplatform.accountability.dto.SimulateBanRequest;
 import com.trustplatform.accountability.dto.SubmitAppealRequest;
 import com.trustplatform.accountability.service.DemoUserSeeder;
 import io.quarkus.test.junit.QuarkusTest;
@@ -142,6 +143,58 @@ class AppealResourceTest {
                 .when().post("/appeals")
                 .then()
                 .statusCode(400);
+    }
+
+    @Test
+    void approvingAppealLiftsActiveBanAndRestoresTrust() {
+        String token = login();
+        String gameId = "gid-" + UUID.randomUUID();
+        String connectionId = linkGame(token, gameId);
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(connectionId, "temporary", 14, true))
+                .when().post("/dev/bans/simulate")
+                .then()
+                .statusCode(200)
+                .body("status", is("confirmed"));
+
+        // Active ban is visible before appeal approval.
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when().get("/bans")
+                .then()
+                .statusCode(200)
+                .body("findAll { it.connectionId == '" + connectionId + "' }.size()", is(1));
+
+        String appealId = given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SubmitAppealRequest(connectionId, "wrong-call", "False positive suspension — please review logs.", 1))
+                .when().post("/appeals")
+                .then()
+                .statusCode(200)
+                .extract().path("appealId");
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new ResolveAppealRequest("approved", "Overturned on review."))
+                .when().post("/appeals/" + appealId + "/resolve")
+                .then()
+                .statusCode(200)
+                .body("status", is("approved"));
+
+        resultStatus(token, connectionId, "overturned");
+
+        // Active ban must now be lifted from GET /bans.
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when().get("/bans")
+                .then()
+                .statusCode(200)
+                .body("findAll { it.connectionId == '" + connectionId + "' }.size()", is(0));
     }
 
     @Test

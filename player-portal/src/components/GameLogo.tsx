@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LauncherLogo } from "./LauncherLogo";
 
 /** Build stable, hotlink-friendly Steam CDN candidates from a numeric appid. */
@@ -29,6 +29,9 @@ export function GameLogo({ src, appId, name, provider, width = 92 }: GameLogoPro
     return Array.from(new Set(list));
   }, [src, appId]);
   const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    setIdx(0);
+  }, [src, appId]);
   const height = Math.round(width * 0.467);
 
   if (candidates.length === 0 || idx >= candidates.length) {

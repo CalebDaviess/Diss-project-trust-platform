@@ -183,6 +183,7 @@ public class AppealService {
         if (record != null) {
             if (approved) {
                 record.status = AccountabilityStatus.OVERTURNED;
+                liftActiveBans(appeal.connectionId, appeal.resolvedAt);
                 restoreTrust(record.profileId, appeal.connectionId);
                 appendAudit(record, OffenceSource.OPERATOR, "operator:review", "APPEAL_APPROVED",
                         appeal.decisionNote);
@@ -210,6 +211,16 @@ public class AppealService {
         }
         int i = java.util.concurrent.ThreadLocalRandom.current().nextInt(SIMULATED_DENIAL_REASONS.size());
         return SIMULATED_DENIAL_REASONS.get(i);
+    }
+
+    /** Expire any currently active external bans on an overturned connection while preserving audit rows. */
+    private void liftActiveBans(String connectionId, Instant liftedAt) {
+        Instant cutoff = liftedAt != null ? liftedAt : Instant.now();
+        for (ExternalBan ban : externalBanRepository.listByConnectionId(connectionId)) {
+            if (ban.isActiveAt(cutoff)) {
+                ban.expiresAt = cutoff;
+            }
+        }
     }
 
     /** Reverse the trust penalties (anti-cheat verdicts + external bans) applied on a connection. */
