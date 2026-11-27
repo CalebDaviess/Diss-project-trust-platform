@@ -18,7 +18,7 @@ import {
   sourceLabel,
   type ActivityCategory,
 } from "../../features/activity";
-import { banExtent, banTypeLabel } from "../../features/bans";
+import { banExtent, banStatusMeta, banTypeLabel } from "../../features/bans";
 import type { TabKey } from "../AppShell";
 import { GameLogo } from "../GameLogo";
 import { AppealModal } from "../AppealModal";
@@ -156,23 +156,26 @@ export function RecordTab({ token, connections, initialGameFilter = "", onChange
             <span className="chip chip--muted">{visibleBans.length}</span>
           </div>
           <ul className="appealable-list">
-            {visibleBans.map((b) => (
-              <li key={b.connectionId} className="appealable-item">
-                <GameLogo src={b.imageUrl} appId={b.gameId} name={b.gameName ?? b.gameId} provider={b.provider} width={84} />
-                <div className="appealable-item__body">
-                  <span className="appealable-item__game">
-                    {banTypeLabel(b.banType)} · {b.gameName ?? b.gameId}
+            {visibleBans.map((b) => {
+              const status = banStatusMeta(b);
+              return (
+                <li key={b.connectionId} className="appealable-item">
+                  <GameLogo src={b.imageUrl} appId={b.gameId} name={b.gameName ?? b.gameId} provider={b.provider} width={84} />
+                  <div className="appealable-item__body">
+                    <span className="appealable-item__game">
+                      {banTypeLabel(b.banType)} · {b.gameName ?? b.gameId}
+                    </span>
+                    <span className="muted">
+                      {banExtent(b)} · {status.detail}
+                      {b.reason ? ` · ${b.reason}` : ""}
+                    </span>
+                  </div>
+                  <span className={`feed__badge feed__badge--${status.tone}`}>
+                    {status.badge}
                   </span>
-                  <span className="muted">
-                    {banExtent(b)}
-                    {b.reason ? ` · ${b.reason}` : ""}
-                  </span>
-                </div>
-                <span className={`feed__badge feed__badge--${b.appealable ? "accent" : "bad"}`}>
-                  {b.appealable ? "Appealable" : "Final · not appealable"}
-                </span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

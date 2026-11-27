@@ -3,6 +3,7 @@ package com.trustplatform.accountability.service;
 import com.trustplatform.accountability.dto.BanView;
 import com.trustplatform.accountability.entity.ExternalBan;
 import com.trustplatform.accountability.entity.GameConnection;
+import com.trustplatform.accountability.repository.AppealRepository;
 import com.trustplatform.accountability.repository.ExternalBanRepository;
 import com.trustplatform.accountability.repository.GameConnectionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -12,17 +13,20 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Lists the player's currently-active bans across all linked games, with display metadata. */
+/** Lists the player's currently-active bans across all linked games, with display and appeal metadata. */
 @ApplicationScoped
 public class BansService {
 
     private final GameConnectionRepository gameConnectionRepository;
     private final ExternalBanRepository externalBanRepository;
+    private final AppealRepository appealRepository;
 
     public BansService(GameConnectionRepository gameConnectionRepository,
-                       ExternalBanRepository externalBanRepository) {
+                       ExternalBanRepository externalBanRepository,
+                       AppealRepository appealRepository) {
         this.gameConnectionRepository = gameConnectionRepository;
         this.externalBanRepository = externalBanRepository;
+        this.appealRepository = appealRepository;
     }
 
     @Transactional
@@ -34,11 +38,22 @@ public class BansService {
             if (ban == null) {
                 continue;
             }
+            String appealStatus = resolveAppealStatus(connection.connectionId);
             bans.add(new BanView(
                     connection.connectionId, connection.gameId, connection.gameName, connection.imageUrl,
                     connection.provider, connection.operatorId, ban.banType, ban.reason,
-                    ban.bannedAt, ban.expiresAt, ban.appealable));
+                    ban.bannedAt, ban.expiresAt, ban.appealable, appealStatus));
         }
         return bans;
+    }
+
+    private String resolveAppealStatus(String connectionId) {
+        if (appealRepository.findOpenByConnection(connectionId) != null) {
+            return "open";
+        }
+        if (appealRepository.findDeniedByConnection(connectionId) != null) {
+            return "denied";
+        }
+        return "none";
     }
 }

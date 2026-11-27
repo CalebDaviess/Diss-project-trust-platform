@@ -1158,3 +1158,48 @@ select option:checked { background: var(--surface-3); color: var(--text); }
   .games__header { flex-direction: column; align-items: flex-start; }
   .gamecard__primary-actions { margin-left: 0; }
 }
+
+
+/* Appeals publisher routing + demo confirmation modal + synced ban states */
+.appeal-card__routed {
+  font-size: 0.84rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  color: var(--text);
+}
+.demo-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+.demo-confirm__warn {
+  padding: 0.8rem 0.95rem;
+  border-radius: var(--radius-xs);
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 42%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.demo-confirm__warn strong { color: var(--warn); font-size: 0.92rem; }
+.demo-confirm__warn p { font-size: 0.85rem; }
+.demo-confirm__effect { font-size: 0.9rem; line-height: 1.5; }
+.demo-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.banlist__item--appealed {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.pill--accent { background: var(--accent-soft); color: var(--accent); }
+.btn--accent-soft {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn--accent-soft:hover { border-color: var(--accent); }

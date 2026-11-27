@@ -102,7 +102,7 @@ If you want to edit code or run the test suites directly without Docker Compose:
 .\dev.ps1
 ```
 
-This creates the Python venv, trains `models/model.joblib` if missing, installs npm packages, boots PostgreSQL + Kafka automatically via Quarkus Dev Services, streams colour-prefixed logs, and opens **http://localhost:5173** (`Ctrl+C` stops all services). Quarkus Dev UI is also available at http://localhost:8081/q/dev.
+This creates the Python venv, trains `models/model.joblib` if missing, installs npm packages, boots PostgreSQL + Kafka automatically via Quarkus Dev Services (on Windows, `.\dev.ps1` automatically falls back to local H2 + in-memory messaging if Docker isn't running, or pass `-NoDocker`), streams colour-prefixed logs, and opens **http://localhost:5173** (`Ctrl+C` stops all services). Quarkus Dev UI is also available at http://localhost:8081/q/dev.
 
 <details>
 <summary><strong>Launcher flags, manual per-service commands &amp; running tests</strong></summary>

@@ -6,16 +6,22 @@ import {
   type AppealView,
   type AppealableSanction,
 } from "../../api/accountabilityApi";
-import { formatDateTime, formatRelativeTime, offenceLabel, sourceLabel } from "../../features/activity";
+import { companyLabel, formatDateTime, formatRelativeTime, offenceLabel, sourceLabel } from "../../features/activity";
 import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
 import type { TabKey } from "../AppShell";
 import { GameLogo } from "../GameLogo";
 import { AppealModal } from "../AppealModal";
+import { StatDetailDialog } from "../StatDetailDialog";
 
 interface AppealsTabProps {
   token: string;
   onChanged?: () => void;
   onNavigate?: (tab: TabKey) => void;
+}
+
+interface PendingDecision {
+  appeal: AppealView;
+  decision: "approved" | "denied";
 }
 
 const STATUS_META: Record<AppealView["status"], { label: string; tone: string }> = {
@@ -24,7 +30,7 @@ const STATUS_META: Record<AppealView["status"], { label: string; tone: string }>
   denied: { label: "Denied — upheld", tone: "bad" },
 };
 
-function AppealStepper({ status }: { status: AppealView["status"] }) {
+function AppealStepper({ status, company }: { status: AppealView["status"]; company: string }) {
   const decided = status !== "submitted";
   return (
     <ol className="appeal-steps" aria-label="Appeal progress">
@@ -34,7 +40,7 @@ function AppealStepper({ status }: { status: AppealView["status"] }) {
       </li>
       <li className={`appeal-step ${decided ? "is-done" : "is-active"}`}>
         <span className="appeal-step__dot" aria-hidden="true">{decided ? "✓" : "2"}</span>
-        <span>Studio review</span>
+        <span>Review by {company}</span>
       </li>
       <li
         className={`appeal-step ${
@@ -59,6 +65,7 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; showAccountLink?: boolean } | null>(null);
   const [appealSanction, setAppealSanction] = useState<AppealableSanction | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -79,25 +86,32 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
     void reload();
   }, [reload]);
 
-  async function resolve(appealId: string, decision: "approved" | "denied", gameName: string) {
-    setResolving(appealId);
+  async function confirmResolve() {
+    if (!pendingDecision) return;
+    const { appeal, decision } = pendingDecision;
+    const gameName = appeal.gameName ?? appeal.gameId;
+    const company = companyLabel(appeal.provider);
+    setResolving(appeal.appealId);
     setError(null);
     setNotice(null);
     try {
-      await resolveAppeal(token, appealId, decision);
+      await resolveAppeal(token, appeal.appealId, decision);
+      setPendingDecision(null);
       await reload();
       onChanged?.();
       setNotice(
         decision === "approved"
           ? {
-              text: `Appeal approved for ${gameName} — sanction overturned, active ban lifted, and trust restored.`,
+              text: `Demo outcome: ${company} overturned the sanction for ${gameName} — active ban removed and trust score restored.`,
               showAccountLink: true,
             }
           : {
-              text: `Appeal denied for ${gameName} — the reviewer's decision note is now visible below.`,
+              text: `Demo outcome: ${company} declined the appeal for ${gameName} — the ban remains upheld on your Account screen.`,
+              showAccountLink: true,
             },
       );
     } catch (err) {
+      setPendingDecision(null);
       setError(err instanceof ApiError ? err.message : "Could not resolve appeal. Please try again.");
       await reload();
     } finally {
@@ -105,14 +119,17 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
     }
   }
 
+  const modalCompany = pendingDecision ? companyLabel(pendingDecision.appeal.provider) : "";
+  const modalGame = pendingDecision ? pendingDecision.appeal.gameName ?? pendingDecision.appeal.gameId : "";
+
   return (
     <div className="appeals">
       <section className="panel panel--hint">
         <h2>Appeals &amp; due process</h2>
         <p className="muted">
-          Contest a confirmed sanction. Your appeal — with your explanation and any evidence — is sent
-          to the game studio's reviewers, who uphold or overturn it. An overturned sanction is lifted
-          and the trust it cost is restored.
+          Contest a confirmed sanction. Your appeal — with your explanation and any evidence — is
+          routed to the game company's reviewers (such as Riot Games, Valve, or Battle.net), who
+          uphold or overturn it. An overturned sanction is lifted and the trust it cost is restored.
         </p>
       </section>
 
@@ -123,7 +140,7 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
           <div className="alert__actions">
             {notice.showAccountLink && onNavigate && (
               <button type="button" className="linkbtn" onClick={() => onNavigate("account")}>
-                View updated trust →
+                View Account →
               </button>
             )}
             <button type="button" className="alert__dismiss" aria-label="Dismiss notice" onClick={() => setNotice(null)}>
@@ -155,7 +172,8 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
                 <div className="appealable-item__body">
                   <span className="appealable-item__game">{s.gameName ?? s.gameId}</span>
                   <span className="muted">
-                    {offenceLabel(s.offenceType)} · {s.source ? sourceLabel(s.source) : "Detected"}
+                    {offenceLabel(s.offenceType)} · {s.source ? sourceLabel(s.source) : "Detected"} · reviewed by{" "}
+                    <strong>{companyLabel(s.provider, s.operatorId)}</strong>
                   </span>
                 </div>
                 <button type="button" className="btn btn--primary btn--sm" onClick={() => setAppealSanction(s)}>
@@ -183,6 +201,7 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
             {appeals.map((a) => {
               const meta = STATUS_META[a.status];
               const gameLabel = a.gameName ?? a.gameId;
+              const company = companyLabel(a.provider);
               return (
                 <li key={a.appealId} className="appeal-card">
                   <GameLogo src={a.imageUrl} appId={a.gameId} name={gameLabel} provider={a.provider} width={84} />
@@ -195,33 +214,39 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
                       {offenceLabel(a.offenceType)} · submitted {formatRelativeTime(a.submittedAt)}
                       {a.evidenceCount > 0 ? ` · ${a.evidenceCount} attachment${a.evidenceCount === 1 ? "" : "s"}` : ""}
                     </span>
-                    <AppealStepper status={a.status} />
+                    <AppealStepper status={a.status} company={company} />
+                    {a.status === "submitted" && (
+                      <p className="appeal-card__routed">
+                        We've sent your appeal request off for review by <strong>{company}</strong>.
+                        <span className="muted"> (Prototype — nothing is sent externally.)</span>
+                      </p>
+                    )}
                     <p className="appeal-card__desc">{a.description}</p>
                     {a.decisionNote && a.status !== "submitted" && (
                       <div className={`appeal-card__decisionbox appeal-card__decisionbox--${meta.tone}`}>
-                        <strong>Studio reviewer:</strong> {a.decisionNote}
+                        <strong>{company} reviewer:</strong> {a.decisionNote}
                       </div>
                     )}
                   </div>
                   {DEMO_CONTROLS_ENABLED && a.status === "submitted" && (
                     <div className="appeal-card__resolve">
-                      <span className="muted appeal-card__devlabel">Simulate studio review:</span>
+                      <span className="muted appeal-card__devlabel">Demo: simulate {company} decision</span>
                       <div className="appeal-card__resolvebtns">
                         <button
                           type="button"
                           className="btn btn--good btn--sm"
                           disabled={resolving === a.appealId}
-                          onClick={() => resolve(a.appealId, "approved", gameLabel)}
+                          onClick={() => setPendingDecision({ appeal: a, decision: "approved" })}
                         >
-                          {resolving === a.appealId ? "Updating…" : "Approve"}
+                          Accept appeal
                         </button>
                         <button
                           type="button"
                           className="btn btn--ghost btn--sm"
                           disabled={resolving === a.appealId}
-                          onClick={() => resolve(a.appealId, "denied", gameLabel)}
+                          onClick={() => setPendingDecision({ appeal: a, decision: "denied" })}
                         >
-                          Deny
+                          Decline appeal
                         </button>
                       </div>
                     </div>
@@ -240,12 +265,78 @@ export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
           onClose={() => setAppealSanction(null)}
           onSubmitted={() => {
             const gameLabel = appealSanction.gameName ?? appealSanction.gameId;
+            const company = companyLabel(appealSanction.provider, appealSanction.operatorId);
             setAppealSanction(null);
-            setNotice({ text: `Appeal submitted for ${gameLabel} — now under studio review.` });
+            setNotice({
+              text: `We've sent your appeal request for ${gameLabel} off for review by ${company} (simulated for demo — nothing is sent externally).`,
+              showAccountLink: true,
+            });
             void reload();
             onChanged?.();
           }}
         />
+      )}
+
+      {pendingDecision && (
+        <StatDetailDialog
+          title={
+            pendingDecision.decision === "approved"
+              ? "Demo simulation — Accept appeal"
+              : "Demo simulation — Decline appeal"
+          }
+          subtitle={`${modalGame} · ${modalCompany}`}
+          onClose={() => {
+            if (!resolving) setPendingDecision(null);
+          }}
+        >
+          <div className="demo-confirm">
+            <div className="demo-confirm__warn" role="note">
+              <strong>Dummy demo behaviour only</strong>
+              <p className="muted">
+                This button simulates a response from <strong>{modalCompany}</strong> so you can test
+                the full appeal lifecycle in this dissertation prototype. Nothing is actually sent to{" "}
+                {modalCompany} or any external game company.
+              </p>
+            </div>
+            <p className="demo-confirm__effect">
+              {pendingDecision.decision === "approved" ? (
+                <>
+                  Simulating <strong>Accept appeal</strong> will overturn the sanction for{" "}
+                  <strong>{modalGame}</strong>, remove the active ban from your Account and My Record
+                  screens, and restore the trust score it cost.
+                </>
+              ) : (
+                <>
+                  Simulating <strong>Decline appeal</strong> will uphold the sanction with a sample
+                  reviewer note and update the ban status on your Account screen to{" "}
+                  <strong>Banned</strong> (appeal declined — final).
+                </>
+              )}
+            </p>
+            <div className="demo-confirm__actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={resolving !== null}
+                onClick={() => setPendingDecision(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`btn ${pendingDecision.decision === "approved" ? "btn--good" : "btn--danger"}`}
+                disabled={resolving !== null}
+                onClick={confirmResolve}
+              >
+                {resolving
+                  ? "Simulating…"
+                  : pendingDecision.decision === "approved"
+                    ? "Simulate accept (demo)"
+                    : "Simulate decline (demo)"}
+              </button>
+            </div>
+          </div>
+        </StatDetailDialog>
       )}
     </div>
   );

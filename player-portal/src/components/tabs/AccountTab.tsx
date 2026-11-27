@@ -13,7 +13,7 @@ import {
 import { offenceLabel } from "../../features/activity";
 import { deriveMetrics, trustTrend, verdictLabel } from "../../features/metrics";
 import { mascotStateFor, type StatCardKey } from "../../features/mascotState";
-import { banExtent, banTypeLabel } from "../../features/bans";
+import { banExtent, banStatusMeta, banTypeLabel } from "../../features/bans";
 import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
 import type { TabKey } from "../AppShell";
 import { Sparkline, TrustGauge } from "../viz/charts";
@@ -192,19 +192,22 @@ function itemsFor(
       }));
     }
     case "bans":
-      return bans.map((b, i) => ({
-        id: `ban-${i}`,
-        tone: b.banType === "permanent" ? "bad" : "warn",
-        logo: { src: b.imageUrl, appId: b.gameId, provider: b.provider, name: b.gameName ?? b.gameId },
-        title: <><strong>{b.gameName ?? b.gameId}</strong> — {banTypeLabel(b.banType)}</>,
-        meta: (
-          <>
-            {banExtent(b)}
-            {b.reason ? ` · ${b.reason}` : ""}
-          </>
-        ),
-        tag: b.appealable ? "appealable" : "final",
-      }));
+      return bans.map((b, i) => {
+        const status = banStatusMeta(b);
+        return {
+          id: `ban-${i}`,
+          tone: status.appealOpen ? "accent" : b.banType === "permanent" || status.tone === "bad" ? "bad" : "warn",
+          logo: { src: b.imageUrl, appId: b.gameId, provider: b.provider, name: b.gameName ?? b.gameId },
+          title: <><strong>{b.gameName ?? b.gameId}</strong> — {banTypeLabel(b.banType)}</>,
+          meta: (
+            <>
+              {banExtent(b)} · {status.detail}
+              {b.reason ? ` · ${b.reason}` : ""}
+            </>
+          ),
+          tag: status.badge,
+        };
+      });
   }
 }
 
@@ -467,29 +470,39 @@ export function AccountTab({
             </div>
           ) : (
             <ul className="banlist">
-              {bannedSignals.map((b, i) => (
-                <li key={`ban-${i}`} className="banlist__item banlist__item--ban">
-                  <GameLogo src={b.imageUrl} appId={b.gameId} name={b.gameName ?? b.gameId} provider={b.provider} width={64} />
-                  <div className="banlist__body">
-                    <span className="banlist__title">
-                      {banTypeLabel(b.banType)} · <strong>{b.gameName ?? b.gameId}</strong>
-                    </span>
-                    <span className="muted">
-                      {banExtent(b)}
-                      {` · ${b.appealable ? "appealable" : "final — not appealable"}`}
-                    </span>
-                  </div>
-                  {b.appealable && onNavigate ? (
-                    <button type="button" className="btn btn--primary btn--sm" onClick={() => onNavigate("appeals")}>
-                      Appeal →
-                    </button>
-                  ) : (
-                    <span className={`pill ${b.appealable ? "" : "pill--bad"}`}>
-                      {b.appealable ? "Appealable" : "Final"}
-                    </span>
-                  )}
-                </li>
-              ))}
+              {bannedSignals.map((b, i) => {
+                const status = banStatusMeta(b);
+                return (
+                  <li key={`ban-${i}`} className={`banlist__item ${status.appealOpen ? "banlist__item--appealed" : "banlist__item--ban"}`}>
+                    <GameLogo src={b.imageUrl} appId={b.gameId} name={b.gameName ?? b.gameId} provider={b.provider} width={64} />
+                    <div className="banlist__body">
+                      <span className="banlist__title">
+                        {banTypeLabel(b.banType)} · <strong>{b.gameName ?? b.gameId}</strong>
+                      </span>
+                      <span className="muted">
+                        {banExtent(b)} · {status.detail}
+                      </span>
+                    </div>
+                    {status.appealOpen ? (
+                      onNavigate ? (
+                        <button type="button" className="btn btn--accent-soft btn--sm" onClick={() => onNavigate("appeals")}>
+                          Appeal open →
+                        </button>
+                      ) : (
+                        <span className="pill pill--accent">{status.badge}</span>
+                      )
+                    ) : status.canAppeal && onNavigate ? (
+                      <button type="button" className="btn btn--primary btn--sm" onClick={() => onNavigate("appeals")}>
+                        Appeal →
+                      </button>
+                    ) : (
+                      <span className={`pill ${status.tone === "bad" ? "pill--bad" : ""}`}>
+                        {status.badge}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
               {confirmedCases.map((c, i) => (
                 <li key={`case-${c.connectionId}-${i}`} className="banlist__item">
                   <GameLogo src={c.gameImageUrl} appId={c.gameId} name={c.gameName} provider={c.gameProvider} width={64} />

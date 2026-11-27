@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activityCategory, activityKind, formatRelativeTime, offenceLabel } from "./activity";
+import { activityCategory, activityKind, companyLabel, formatRelativeTime, offenceLabel } from "./activity";
+import { banStatusMeta } from "./bans";
 
 describe("offenceLabel", () => {
   it("formats known camelCase and enum codes into plain English", () => {
@@ -36,5 +37,37 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime("2026-11-26T12:00:00Z", now)).toBe("Yesterday");
     expect(formatRelativeTime("2026-11-15T12:00:00Z", now)).toBe("12d ago");
     expect(formatRelativeTime("2026-09-01T12:00:00Z", now)).toContain("2026");
+  });
+});
+
+describe("companyLabel & banStatusMeta", () => {
+  it("maps publisher/provider codes to readable game company names", () => {
+    expect(companyLabel("riot")).toBe("Riot Games");
+    expect(companyLabel("steam")).toBe("Valve (Steam)");
+    expect(companyLabel("battlenet")).toBe("Blizzard (Battle.net)");
+    expect(companyLabel(null, "op-epic")).toBe("Epic Games");
+    expect(companyLabel(null, null)).toBe("the game company");
+  });
+
+  it("reflects open, denied, final, and appealable ban states consistently", () => {
+    const open = banStatusMeta({ appealable: true, appealStatus: "open", provider: "steam", operatorId: "steam" });
+    expect(open.badge).toBe("Appeal open");
+    expect(open.appealOpen).toBe(true);
+    expect(open.canAppeal).toBe(false);
+    expect(open.detail).toContain("Valve (Steam)");
+
+    const denied = banStatusMeta({ appealable: true, appealStatus: "denied", provider: "riot", operatorId: "riot" });
+    expect(denied.badge).toBe("Banned");
+    expect(denied.tone).toBe("bad");
+    expect(denied.canAppeal).toBe(false);
+    expect(denied.detail).toContain("Riot Games");
+
+    const finalBan = banStatusMeta({ appealable: false, appealStatus: "none", provider: "epic", operatorId: "epic" });
+    expect(finalBan.badge).toBe("Banned · final");
+    expect(finalBan.canAppeal).toBe(false);
+
+    const appealable = banStatusMeta({ appealable: true, appealStatus: "none", provider: "steam", operatorId: "steam" });
+    expect(appealable.badge).toBe("Appealable");
+    expect(appealable.canAppeal).toBe(true);
   });
 });

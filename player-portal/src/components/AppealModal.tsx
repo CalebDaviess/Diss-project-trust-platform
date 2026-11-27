@@ -5,7 +5,7 @@ import {
   type AppealableSanction,
   type AppealView,
 } from "../api/accountabilityApi";
-import { offenceLabel, sourceLabel } from "../features/activity";
+import { companyLabel, offenceLabel, sourceLabel } from "../features/activity";
 import { StatDetailDialog } from "./StatDetailDialog";
 import { GameLogo } from "./GameLogo";
 
@@ -84,10 +84,12 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
     }
   }
 
+  const company = companyLabel(sanction.provider, sanction.operatorId);
+
   return (
     <StatDetailDialog
       title="Appeal a sanction"
-      subtitle="Your appeal is sent to the game studio's review team"
+      subtitle={`Your appeal request will be routed to ${company} for review`}
       onClose={onClose}
     >
       <form className="appeal-form" onSubmit={handleSubmit}>
@@ -167,10 +169,10 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
         {error && <p className="alert alert--error" role="alert">{error}</p>}
 
         <button type="submit" className="btn btn--primary btn--block" disabled={submitting || uploading}>
-          {submitting ? "Submitting appeal…" : "Submit appeal for review"}
+          {submitting ? `Sending to ${company}…` : `Submit appeal to ${company}`}
         </button>
         <p className="muted appeal-form__note">
-          You'll see this as “Under review” until the studio's reviewers respond.
+          Prototype notice: this simulates sending your appeal to {company} — nothing is actually sent outside this app.
         </p>
       </form>
     </StatDetailDialog>

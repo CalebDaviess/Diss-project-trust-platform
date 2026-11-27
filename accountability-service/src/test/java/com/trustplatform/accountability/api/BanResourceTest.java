@@ -118,6 +118,59 @@ class BanResourceTest {
                 .body("caseHistory.find { it.status == 'confirmed' }.offenceType", is("chatAbuse"));
     }
 
+    @Test
+    void banAppealStatusTracksOpenDeniedAndDisappearsOnOverturn() {
+        String token = login();
+
+        // Case 1: Ban -> appeal open -> appeal denied (stays active as "denied").
+        String deniedConn = linkGame(token, "gid-denied-" + UUID.randomUUID());
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(deniedConn, "temporary", 14, true))
+                .when().post("/dev/bans/simulate").then().statusCode(200);
+
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/bans").then().statusCode(200)
+                .body("find { it.connectionId == '" + deniedConn + "' }.appealStatus", is("none"));
+
+        String deniedAppealId = given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new SubmitAppealRequest(deniedConn, "wrong-call", "Requesting review of temporary ban.", 0))
+                .when().post("/appeals").then().statusCode(200).extract().path("appealId");
+
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/bans").then().statusCode(200)
+                .body("find { it.connectionId == '" + deniedConn + "' }.appealStatus", is("open"));
+
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.ResolveAppealRequest("denied", "Upheld after review."))
+                .when().post("/appeals/" + deniedAppealId + "/resolve").then().statusCode(200);
+
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/bans").then().statusCode(200)
+                .body("find { it.connectionId == '" + deniedConn + "' }.appealStatus", is("denied"));
+
+        // Case 2: Ban -> appeal open -> appeal approved (disappears completely from active bans).
+        String approvedConn = linkGame(token, "gid-approved-" + UUID.randomUUID());
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(approvedConn, "temporary", 14, true))
+                .when().post("/dev/bans/simulate").then().statusCode(200);
+
+        String approvedAppealId = given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new SubmitAppealRequest(approvedConn, "wrong-call", "False positive — please overturn.", 0))
+                .when().post("/appeals").then().statusCode(200).extract().path("appealId");
+
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/bans").then().statusCode(200)
+                .body("find { it.connectionId == '" + approvedConn + "' }.appealStatus", is("open"));
+
+        given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
+                .body(new com.trustplatform.accountability.dto.ResolveAppealRequest("approved", "Overturned."))
+                .when().post("/appeals/" + approvedAppealId + "/resolve").then().statusCode(200);
+
+        given().header("Authorization", "Bearer " + token)
+                .when().get("/bans").then().statusCode(200)
+                .body("findAll { it.connectionId == '" + approvedConn + "' }.size()", is(0));
+    }
+
     private String login() {
         return given()
                 .contentType(ContentType.JSON)

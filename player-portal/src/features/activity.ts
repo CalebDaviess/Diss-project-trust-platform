@@ -26,6 +26,36 @@ const OFFENCE_LABELS: Record<string, string> = {
   none: "General conduct",
 };
 
+const COMPANY_LABELS: Record<string, string> = {
+  steam: "Valve (Steam)",
+  riot: "Riot Games",
+  battlenet: "Blizzard (Battle.net)",
+  epic: "Epic Games",
+  xbox: "Xbox",
+  psn: "PlayStation",
+  ea: "EA",
+  ubisoft: "Ubisoft",
+  microsoft: "Microsoft",
+  roblox: "Roblox",
+  hoyoverse: "HoYoverse",
+  supercell: "Supercell",
+  niantic: "Niantic",
+  "square-enix": "Square Enix",
+  jagex: "Jagex",
+};
+
+/** Friendly publisher / game-company name for a provider or operator id (e.g. "Riot Games", "Valve (Steam)"). */
+export function companyLabel(provider?: string | null, operatorId?: string | null): string {
+  const candidates = [provider, operatorId?.replace(/^op-/i, "")];
+  for (const raw of candidates) {
+    if (!raw || !raw.trim()) continue;
+    const key = raw.trim().toLowerCase();
+    if (COMPANY_LABELS[key]) return COMPANY_LABELS[key];
+    return raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1);
+  }
+  return "the game company";
+}
+
 /** Turn machine offence codes (e.g. "chatAbuse", "aimbot") into plain English labels. */
 export function offenceLabel(raw?: string | null): string {
   if (!raw || !raw.trim()) return "Offence";

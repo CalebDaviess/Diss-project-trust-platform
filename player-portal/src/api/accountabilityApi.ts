@@ -546,6 +546,8 @@ export interface BanView {
   expiresAt: string | null;
   /** Whether the operator marked the ban appealable. */
   appealable: boolean;
+  /** Current appeal lifecycle on this connection: "none" | "open" | "denied". */
+  appealStatus?: "none" | "open" | "denied";
 }
 
 /** Request body for the dev-only POST /dev/bans/simulate hook. */
