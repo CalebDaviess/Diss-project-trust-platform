@@ -5,6 +5,11 @@ import type { Theme } from "../hooks/useTheme";
 
 export type TabKey = "dashboard" | "record" | "games" | "appeals" | "account" | "concept";
 
+export interface NavBadge {
+  count: number;
+  tone?: "accent" | "warn" | "bad" | "muted";
+}
+
 interface TabDef {
   key: TabKey;
   label: string;
@@ -25,13 +30,6 @@ const I = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
       <path d="M14 3v5h5M8 13h8M8 17h5" strokeLinecap="round" />
-    </svg>
-  ),
-  submit: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 13a8 8 0 0 1 8-8 8 8 0 0 1 8 8" strokeLinecap="round" />
-      <path d="M12 13l5-3M12 13v6" strokeLinecap="round" />
-      <circle cx="12" cy="13" r="1.6" fill="currentColor" stroke="none" />
     </svg>
   ),
   games: (
@@ -84,6 +82,7 @@ const TAB_SUBTITLES: Record<TabKey, string> = {
 interface AppShellProps {
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
+  badges?: Partial<Record<TabKey, NavBadge>>;
   signedInAs: string;
   profile?: ProfileView | null;
   theme: Theme;
@@ -100,6 +99,7 @@ function initials(email: string): string {
 export function AppShell({
   activeTab,
   onTabChange,
+  badges,
   signedInAs,
   profile,
   theme,
@@ -113,24 +113,38 @@ export function AppShell({
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="sidebar__brand brand">
+        <button
+          type="button"
+          className="sidebar__brand brand brand--btn"
+          onClick={() => onTabChange("dashboard")}
+          aria-label="Trust Platform home"
+        >
           <span className="brand__mark" aria-hidden="true">◈</span>
           <span className="brand__name">Trust Platform</span>
-        </div>
+        </button>
 
         <nav className="sidebar__nav" aria-label="Main">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              className={`navitem ${activeTab === tab.key ? "is-active" : ""}`}
-              aria-current={activeTab === tab.key ? "page" : undefined}
-              onClick={() => onTabChange(tab.key)}
-            >
-              <span className="navitem__icon">{tab.icon}</span>
-              <span className="navitem__label">{tab.label}</span>
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const badge = badges?.[tab.key];
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                className={`navitem ${activeTab === tab.key ? "is-active" : ""}`}
+                aria-current={activeTab === tab.key ? "page" : undefined}
+                title={tab.label}
+                onClick={() => onTabChange(tab.key)}
+              >
+                <span className="navitem__icon">{tab.icon}</span>
+                <span className="navitem__label">{tab.label}</span>
+                {badge && badge.count > 0 && (
+                  <span className={`navitem__badge navitem__badge--${badge.tone ?? "muted"}`}>
+                    {badge.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="sidebar__foot">
@@ -153,10 +167,15 @@ export function AppShell({
           </div>
           <div className="topbar__actions">
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-            <div className="userchip">
+            <button
+              type="button"
+              className="userchip userchip--btn"
+              onClick={() => onTabChange("account")}
+              title="View your account"
+            >
               <span className="userchip__avatar" aria-hidden="true">{initials(signedInAs)}</span>
-              <span className="userchip__name">{signedInAs}</span>
-            </div>
+              <span className="userchip__name">{profile?.holderName ?? signedInAs}</span>
+            </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={onSignOut}>
               Sign out
             </button>
@@ -174,7 +193,11 @@ export function AppShell({
           </div>
         )}
 
-        <main className="content">{children}</main>
+        <main className="content">
+          <div key={activeTab} className="tabstage">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

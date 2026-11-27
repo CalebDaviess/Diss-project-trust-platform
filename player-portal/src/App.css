@@ -214,7 +214,23 @@ select option:checked { background: var(--surface-3); color: var(--text); }
 }
 .userchip__name { font-size: 0.85rem; font-weight: 600; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.content { padding: 1.6rem; display: flex; flex-direction: column; gap: 1.3rem; }
+.content {
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.tabstage {
+  animation: tabEnter 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes tabEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ============================================================================
  * Panels
@@ -822,18 +838,18 @@ select option:checked { background: var(--surface-3); color: var(--text); }
 .trustchart { display: flex; flex-direction: column; gap: 0.6rem; }
 .trustchart__controls { display: inline-flex; gap: 0.35rem; align-self: flex-end; }
 .rangebtn {
-  background: var(--surface-2); color: var(--muted-text, var(--text));
+  background: var(--surface-2); color: var(--text-muted);
   border: 1px solid var(--card-border); border-radius: 999px;
   padding: 0.25rem 0.7rem; font-size: 0.74rem; font-weight: 600; cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.rangebtn:hover { border-color: var(--accent); }
+.rangebtn:hover { border-color: var(--accent); color: var(--text); }
 .rangebtn--on {
   background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
   color: #fff; border-color: transparent;
 }
 .trustchart__svg { width: 100%; height: auto; }
-.trustchart__axis { fill: var(--muted-text, var(--text)); font-size: 10px; opacity: 0.7; }
+.trustchart__axis { fill: var(--text-muted); font-size: 10px; opacity: 0.85; }
 
 /* ===== Age assurance & parental (guardian-controlled) accounts ===== */
 
@@ -875,7 +891,7 @@ select option:checked { background: var(--surface-3); color: var(--text); }
 /* Account-tab access card + come-of-age */
 .account__access { margin-top: 0.4rem; }
 .accesscard__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 1.2rem; margin: 0.4rem 0 0.9rem; }
-.accesscard__grid dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-text, var(--text)); opacity: 0.75; }
+.accesscard__grid dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .accesscard__grid dd { margin: 0.1rem 0 0; font-weight: 600; }
 .accesscard__note { margin: 0.3rem 0 0; }
 .comeofage {
@@ -907,3 +923,238 @@ select option:checked { background: var(--surface-3); color: var(--text); }
   border-radius: 10px; font-size: 0.85rem; font-weight: 800; color: #fff; background: var(--bad);
 }
 .agelock p { margin: 0.2rem 0 0; }
+
+
+/* ============================================================================
+ * Fluid UX upgrades: nav badges, skeletons, interactive chart, action banners,
+ * 2-tier game cards, category filter chips, appeal stepper, password controls
+ * ========================================================================== */
+
+/* Interactive brand & topbar userchip */
+.brand--btn {
+  background: none; border: none; color: var(--text); text-align: left;
+  border-radius: var(--radius-xs); transition: opacity 0.15s ease;
+}
+.brand--btn:hover { opacity: 0.9; }
+
+.navitem { position: relative; }
+.navitem.is-active::before {
+  content: ""; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px;
+  border-radius: 999px; background: var(--accent-grad);
+}
+.navitem__badge {
+  margin-left: auto; font-size: 0.7rem; font-weight: 700; min-width: 1.35rem; height: 1.35rem;
+  padding: 0 0.4rem; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+}
+.navitem__badge--muted { background: var(--surface-3); color: var(--text-muted); }
+.navitem__badge--accent { background: var(--accent-soft); color: var(--accent); }
+.navitem__badge--warn { background: var(--warn-soft); color: var(--warn); }
+.navitem__badge--bad { background: var(--bad-soft); color: var(--bad); }
+
+.userchip--btn {
+  color: var(--text); transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
+}
+.userchip--btn:hover { border-color: var(--accent); background: var(--surface-3); transform: translateY(-1px); }
+
+/* Extra button semantics */
+.btn--danger {
+  background: var(--bad); color: #fff; border-color: transparent;
+  box-shadow: 0 8px 20px -10px var(--bad);
+}
+.btn--good {
+  background: var(--good); color: #052e22; border-color: transparent; font-weight: 700;
+}
+
+/* Dismissible action banners & alerts */
+.alert--row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.85rem; flex-wrap: wrap;
+}
+.alert__actions { display: inline-flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+.alert__dismiss {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px;
+  border: 1px solid var(--card-border); background: var(--surface-2); color: var(--text-muted);
+  font-size: 1rem; line-height: 1; transition: color 0.15s ease, border-color 0.15s ease;
+}
+.alert__dismiss:hover { color: var(--text); border-color: var(--card-border-strong); }
+
+.actionbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  padding: 0.85rem 1.1rem; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--warn) 12%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, var(--card-border));
+  box-shadow: var(--shadow-soft);
+}
+.actionbar__body { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; font-size: 0.92rem; }
+
+/* Panel header link + sub-actions */
+.panel__head-right { display: inline-flex; align-items: center; gap: 0.65rem; }
+.panel__link { font-size: 0.82rem; text-decoration: none; }
+.panel__link:hover { text-decoration: underline; }
+.timeline__headline { display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+
+/* Shimmer skeletons */
+.skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-2) 45%,
+    var(--surface-3) 55%,
+    var(--surface) 100%
+  );
+  background-size: 220% 100%;
+  border: 1px solid var(--card-border);
+  animation: shimmer 1.35s ease-in-out infinite;
+}
+.skeleton--metric { height: 138px; }
+.skeleton--panel { height: 280px; }
+.skeleton--chart { height: 200px; border-radius: var(--radius-sm); }
+.skeleton--row { height: 64px; border-radius: var(--radius-xs); }
+.skeleton--gamecard { height: 118px; border-radius: var(--radius-sm); }
+.skeleton-stack { display: flex; flex-direction: column; gap: 0.65rem; }
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Interactive trust chart readout */
+.trustchart__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+}
+.trustchart__readout {
+  font-size: 0.82rem; min-height: 1.5rem; display: inline-flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;
+}
+.trustchart__score { font-weight: 700; color: var(--text); }
+.trustchart__delta {
+  margin-left: 0.25rem; padding: 0.08rem 0.42rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+}
+.trustchart__delta.is-good { background: var(--good-soft); color: var(--good); }
+.trustchart__delta.is-bad { background: var(--bad-soft); color: var(--bad); }
+.trustchart__marker { cursor: pointer; outline: none; }
+.trustchart__marker:focus circle:last-of-type { stroke: var(--accent); stroke-width: 2.5; }
+.dot--good { background: var(--good); }
+
+/* Auth UX polish: password toggle, steps, live password checks */
+.password-wrap { position: relative; display: flex; align-items: center; }
+.password-wrap input { width: 100%; padding-right: 3.8rem; }
+.password-toggle {
+  position: absolute; right: 0.45rem; padding: 0.25rem 0.5rem; border: none; border-radius: 6px;
+  background: transparent; color: var(--text-muted); font-size: 0.78rem; font-weight: 600;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.password-toggle:hover { color: var(--text); background: var(--surface-3); }
+.auth__hint-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.step-heading {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); margin-top: 0.2rem;
+}
+.step-heading__num {
+  display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-size: 0.72rem;
+}
+.pw-checks { display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.78rem; }
+.pw-check { color: var(--text-muted); transition: color 0.15s ease; }
+.pw-check.is-ok { color: var(--good); font-weight: 600; }
+
+/* My Record category filter chips */
+.filterchips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.filterchip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+  background: var(--surface-2); border: 1px solid var(--card-border); color: var(--text-muted);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.filterchip:hover { border-color: var(--card-border-strong); color: var(--text); }
+.filterchip.is-active {
+  background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent);
+}
+.filterchip__count {
+  font-size: 0.72rem; padding: 0.05rem 0.4rem; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-muted);
+}
+.filterchip.is-active .filterchip__count { background: var(--accent); color: #fff; }
+
+/* Games tab: clean 2-tier game card + demo sandbox strip + unlink confirm */
+.gamecard--stacked {
+  flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.gamecard--stacked:hover { border-color: var(--card-border-strong); }
+.gamecard__main {
+  display: flex; align-items: center; gap: 0.95rem; padding: 0.9rem 1.05rem; flex-wrap: wrap;
+}
+.gamecard__primary-actions { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-left: auto; }
+.unlink-confirm { display: inline-flex; align-items: center; gap: 0.35rem; }
+.gamecard__demo {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.6rem 1.05rem; background: var(--surface-2); border-top: 1px solid var(--card-border);
+}
+.gamecard__demolabel {
+  font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
+}
+
+/* AddGameModal popular chips + already-linked state */
+.popular-picks { display: flex; flex-direction: column; gap: 0.45rem; }
+.popular-picks__label { font-size: 0.78rem; font-weight: 600; }
+.popular-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.popular-chip {
+  padding: 0.35rem 0.72rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+  background: var(--surface-2); border: 1px solid var(--card-border); color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+.popular-chip:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.searchlist__item--linked { opacity: 0.6; cursor: default; }
+.searchlist__item--linked:hover { border-color: var(--card-border); }
+.searchlist__item--linked .searchlist__cta { color: var(--good); }
+
+/* Appeals tab: 3-step due-process stepper + decision callout box */
+.appeal-steps {
+  list-style: none; margin: 0.3rem 0 0.35rem; padding: 0;
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+}
+.appeal-step {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.75rem; font-weight: 600; color: var(--text-faint);
+}
+.appeal-step:not(:last-child)::after {
+  content: "→"; margin-left: 0.35rem; color: var(--text-faint); font-weight: 400;
+}
+.appeal-step__dot {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  font-size: 0.68rem; font-weight: 800; background: var(--surface-3); color: var(--text-muted);
+}
+.appeal-step.is-done { color: var(--text-muted); }
+.appeal-step.is-done .appeal-step__dot { background: var(--accent-soft); color: var(--accent); }
+.appeal-step.is-active { color: var(--warn); }
+.appeal-step.is-active .appeal-step__dot { background: var(--warn-soft); color: var(--warn); }
+.appeal-step.is-good { color: var(--good); }
+.appeal-step.is-good .appeal-step__dot { background: var(--good-soft); color: var(--good); }
+.appeal-step.is-bad { color: var(--bad); }
+.appeal-step.is-bad .appeal-step__dot { background: var(--bad-soft); color: var(--bad); }
+
+.appeal-card__decisionbox {
+  margin-top: 0.35rem; padding: 0.6rem 0.75rem; border-radius: var(--radius-xs); font-size: 0.84rem;
+  background: var(--surface); border-left: 3px solid var(--accent);
+}
+.appeal-card__decisionbox--good { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 8%, var(--surface)); }
+.appeal-card__decisionbox--bad { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--surface)); }
+.appeal-card__resolvebtns { display: inline-flex; gap: 0.4rem; }
+
+/* Appeal modal character counter */
+.field__labelrow { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.charcount { font-size: 0.75rem; font-weight: 600; color: var(--text-faint); }
+.charcount.is-ok { color: var(--good); }
+
+/* Mobile refinements */
+@media (max-width: 860px) {
+  .navitem__badge {
+    position: absolute; top: 4px; right: 6px; min-width: 1.05rem; height: 1.05rem; font-size: 0.62rem; padding: 0 0.25rem;
+  }
+  .appeal-card { flex-direction: column; }
+  .appeal-card__resolve { align-items: flex-start; width: 100%; }
+}
+@media (max-width: 560px) {
+  .games__header { flex-direction: column; align-items: flex-start; }
+  .gamecard__primary-actions { margin-left: 0; }
+}

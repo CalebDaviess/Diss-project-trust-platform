@@ -6,14 +6,16 @@ import {
   type AppealView,
   type AppealableSanction,
 } from "../../api/accountabilityApi";
-import { sourceLabel } from "../../features/activity";
+import { formatDateTime, formatRelativeTime, offenceLabel, sourceLabel } from "../../features/activity";
 import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
+import type { TabKey } from "../AppShell";
 import { GameLogo } from "../GameLogo";
 import { AppealModal } from "../AppealModal";
 
 interface AppealsTabProps {
   token: string;
   onChanged?: () => void;
+  onNavigate?: (tab: TabKey) => void;
 }
 
 const STATUS_META: Record<AppealView["status"], { label: string; tone: string }> = {
@@ -22,16 +24,40 @@ const STATUS_META: Record<AppealView["status"], { label: string; tone: string }>
   denied: { label: "Denied — upheld", tone: "bad" },
 };
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+function AppealStepper({ status }: { status: AppealView["status"] }) {
+  const decided = status !== "submitted";
+  return (
+    <ol className="appeal-steps" aria-label="Appeal progress">
+      <li className="appeal-step is-done">
+        <span className="appeal-step__dot" aria-hidden="true">✓</span>
+        <span>Submitted</span>
+      </li>
+      <li className={`appeal-step ${decided ? "is-done" : "is-active"}`}>
+        <span className="appeal-step__dot" aria-hidden="true">{decided ? "✓" : "2"}</span>
+        <span>Studio review</span>
+      </li>
+      <li
+        className={`appeal-step ${
+          status === "approved" ? "is-good" : status === "denied" ? "is-bad" : ""
+        }`}
+      >
+        <span className="appeal-step__dot" aria-hidden="true">
+          {status === "approved" ? "✓" : status === "denied" ? "!" : "3"}
+        </span>
+        <span>
+          {status === "approved" ? "Overturned" : status === "denied" ? "Upheld" : "Decision"}
+        </span>
+      </li>
+    </ol>
+  );
 }
 
-export function AppealsTab({ token, onChanged }: AppealsTabProps) {
+export function AppealsTab({ token, onChanged, onNavigate }: AppealsTabProps) {
   const [appealable, setAppealable] = useState<AppealableSanction[]>([]);
   const [appeals, setAppeals] = useState<AppealView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; showAccountLink?: boolean } | null>(null);
   const [appealSanction, setAppealSanction] = useState<AppealableSanction | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
 
@@ -53,15 +79,24 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
     void reload();
   }, [reload]);
 
-  async function resolve(appealId: string, decision: "approved" | "denied") {
+  async function resolve(appealId: string, decision: "approved" | "denied", gameName: string) {
     setResolving(appealId);
     setError(null);
+    setNotice(null);
     try {
-      // No note passed: the operator/reviewer decides the wording. In the demo the backend fills a
-      // representative reason (random on a denial), mirroring an operator leaving a comment.
       await resolveAppeal(token, appealId, decision);
       await reload();
       onChanged?.();
+      setNotice(
+        decision === "approved"
+          ? {
+              text: `Appeal approved for ${gameName} — sanction overturned, active ban lifted, and trust restored.`,
+              showAccountLink: true,
+            }
+          : {
+              text: `Appeal denied for ${gameName} — the reviewer's decision note is now visible below.`,
+            },
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not resolve appeal. Please try again.");
       await reload();
@@ -82,6 +117,21 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
       </section>
 
       {error && <p className="alert alert--error" role="alert">{error}</p>}
+      {notice && (
+        <div className="alert alert--info alert--row" role="status">
+          <span>{notice.text}</span>
+          <div className="alert__actions">
+            {notice.showAccountLink && onNavigate && (
+              <button type="button" className="linkbtn" onClick={() => onNavigate("account")}>
+                View updated trust →
+              </button>
+            )}
+            <button type="button" className="alert__dismiss" aria-label="Dismiss notice" onClick={() => setNotice(null)}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="panel">
         <div className="panel__head">
@@ -89,11 +139,13 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
           <span className="chip chip--muted">{appealable.length}</span>
         </div>
         {loading ? (
-          <p className="muted">Loading…</p>
+          <div className="skeleton-stack" aria-busy="true">
+            <div className="skeleton skeleton--row" />
+          </div>
         ) : appealable.length === 0 ? (
           <div className="goodstate">
             <span className="goodstate__icon" aria-hidden="true">✓</span>
-            <p>No sanctions to appeal. Confirmed offences would appear here with an Appeal button.</p>
+            <p>No sanctions open to appeal. Confirmed appealable offences will appear here with an Appeal button.</p>
           </div>
         ) : (
           <ul className="appealable-list">
@@ -103,7 +155,7 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
                 <div className="appealable-item__body">
                   <span className="appealable-item__game">{s.gameName ?? s.gameId}</span>
                   <span className="muted">
-                    {s.offenceType ?? "offence"} · {s.source ? sourceLabel(s.source) : "detected"}
+                    {offenceLabel(s.offenceType)} · {s.source ? sourceLabel(s.source) : "Detected"}
                   </span>
                 </div>
                 <button type="button" className="btn btn--primary btn--sm" onClick={() => setAppealSanction(s)}>
@@ -120,38 +172,58 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
           <h2>Your appeals</h2>
           <span className="chip chip--muted">{appeals.length}</span>
         </div>
-        {appeals.length === 0 ? (
+        {loading ? (
+          <div className="skeleton-stack" aria-busy="true">
+            <div className="skeleton skeleton--row" />
+          </div>
+        ) : appeals.length === 0 ? (
           <p className="muted">You haven't submitted any appeals yet.</p>
         ) : (
           <ul className="appeal-cards">
             {appeals.map((a) => {
               const meta = STATUS_META[a.status];
+              const gameLabel = a.gameName ?? a.gameId;
               return (
                 <li key={a.appealId} className="appeal-card">
-                  <GameLogo src={a.imageUrl} appId={a.gameId} name={a.gameName ?? a.gameId} provider={a.provider} width={84} />
+                  <GameLogo src={a.imageUrl} appId={a.gameId} name={gameLabel} provider={a.provider} width={84} />
                   <div className="appeal-card__body">
                     <span className="appeal-card__head">
-                      <strong>{a.gameName ?? a.gameId}</strong>
+                      <strong>{gameLabel}</strong>
                       <span className={`feed__badge feed__badge--${meta.tone}`}>{meta.label}</span>
                     </span>
-                    <span className="muted appeal-card__meta">
-                      {a.offenceType ?? "offence"} · submitted {formatDate(a.submittedAt)}
-                      {a.evidenceCount > 0 ? ` · ${a.evidenceCount} attachment(s)` : ""}
+                    <span className="muted appeal-card__meta" title={formatDateTime(a.submittedAt)}>
+                      {offenceLabel(a.offenceType)} · submitted {formatRelativeTime(a.submittedAt)}
+                      {a.evidenceCount > 0 ? ` · ${a.evidenceCount} attachment${a.evidenceCount === 1 ? "" : "s"}` : ""}
                     </span>
+                    <AppealStepper status={a.status} />
                     <p className="appeal-card__desc">{a.description}</p>
                     {a.decisionNote && a.status !== "submitted" && (
-                      <p className="muted appeal-card__decision">Reviewer: {a.decisionNote}</p>
+                      <div className={`appeal-card__decisionbox appeal-card__decisionbox--${meta.tone}`}>
+                        <strong>Studio reviewer:</strong> {a.decisionNote}
+                      </div>
                     )}
                   </div>
                   {DEMO_CONTROLS_ENABLED && a.status === "submitted" && (
                     <div className="appeal-card__resolve">
                       <span className="muted appeal-card__devlabel">Simulate studio review:</span>
-                      <button type="button" className="btn btn--ghost btn--sm" disabled={resolving === a.appealId} onClick={() => resolve(a.appealId, "approved")}>
-                        Approve
-                      </button>
-                      <button type="button" className="btn btn--ghost btn--sm" disabled={resolving === a.appealId} onClick={() => resolve(a.appealId, "denied")}>
-                        Deny
-                      </button>
+                      <div className="appeal-card__resolvebtns">
+                        <button
+                          type="button"
+                          className="btn btn--good btn--sm"
+                          disabled={resolving === a.appealId}
+                          onClick={() => resolve(a.appealId, "approved", gameLabel)}
+                        >
+                          {resolving === a.appealId ? "Updating…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={resolving === a.appealId}
+                          onClick={() => resolve(a.appealId, "denied", gameLabel)}
+                        >
+                          Deny
+                        </button>
+                      </div>
                     </div>
                   )}
                 </li>
@@ -167,7 +239,9 @@ export function AppealsTab({ token, onChanged }: AppealsTabProps) {
           sanction={appealSanction}
           onClose={() => setAppealSanction(null)}
           onSubmitted={() => {
+            const gameLabel = appealSanction.gameName ?? appealSanction.gameId;
             setAppealSanction(null);
+            setNotice({ text: `Appeal submitted for ${gameLabel} — now under studio review.` });
             void reload();
             onChanged?.();
           }}

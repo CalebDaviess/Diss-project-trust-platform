@@ -5,7 +5,7 @@ import {
   type AppealableSanction,
   type AppealView,
 } from "../api/accountabilityApi";
-import { sourceLabel } from "../features/activity";
+import { offenceLabel, sourceLabel } from "../features/activity";
 import { StatDetailDialog } from "./StatDetailDialog";
 import { GameLogo } from "./GameLogo";
 
@@ -24,6 +24,8 @@ const GROUNDS = [
   { value: "other", label: "Other" },
 ];
 
+const MIN_DESC_LEN = 10;
+
 /** Appeal form: offence context + grounds + description + mock evidence upload. */
 export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealModalProps) {
   const [grounds, setGrounds] = useState("not-me");
@@ -40,23 +42,25 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
     };
   }, []);
 
+  const descLen = description.trim().length;
+  const descReady = descLen >= MIN_DESC_LEN;
+
   function addEvidence(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
     const names = Array.from(fileList).map((f) => f.name);
-    // Mock upload: nothing leaves the browser, we just simulate a short processing delay.
     setUploading(true);
     if (uploadTimer.current) window.clearTimeout(uploadTimer.current);
     uploadTimer.current = window.setTimeout(() => {
       setFiles((prev) => [...prev, ...names]);
       setUploading(false);
-    }, 1200);
+    }, 1000);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    if (description.trim().length < 10) {
-      setError("Please describe what happened (at least 10 characters).");
+    if (!descReady) {
+      setError(`Please describe what happened (at least ${MIN_DESC_LEN} characters).`);
       return;
     }
     setSubmitting(true);
@@ -92,8 +96,8 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
           <div>
             <span className="appeal-ctx__game">{sanction.gameName ?? sanction.gameId}</span>
             <span className="muted appeal-ctx__meta">
-              {sanction.offenceType ?? "offence"} ·{" "}
-              {sanction.source ? sourceLabel(sanction.source) : "detected"}
+              {offenceLabel(sanction.offenceType)} ·{" "}
+              {sanction.source ? sourceLabel(sanction.source) : "Detected"}
               {sanction.score != null ? ` · score ${sanction.score}` : ""}
             </span>
           </div>
@@ -110,7 +114,12 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
         </label>
 
         <label className="field">
-          <span>What happened?</span>
+          <span className="field__labelrow">
+            <span>What happened?</span>
+            <span className={`charcount ${descReady ? "is-ok" : ""}`}>
+              {descReady ? `${descLen} chars ✓` : `${descLen} / ${MIN_DESC_LEN} min`}
+            </span>
+          </span>
           <textarea
             className="appeal-textarea"
             value={description}

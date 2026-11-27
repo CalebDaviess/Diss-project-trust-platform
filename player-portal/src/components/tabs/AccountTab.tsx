@@ -11,10 +11,12 @@ import {
   type ProfileView,
   type ResultView,
 } from "../../api/accountabilityApi";
+import { offenceLabel } from "../../features/activity";
 import { deriveMetrics, trustTrend, verdictLabel } from "../../features/metrics";
 import { mascotStateFor, type StatCardKey } from "../../features/mascotState";
 import { banExtent, banTypeLabel } from "../../features/bans";
 import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
+import type { TabKey } from "../AppShell";
 import { Sparkline, TrustGauge } from "../viz/charts";
 import { TrustHistoryChart } from "../viz/TrustHistoryChart";
 import { StatCard } from "../viz/StatCard";
@@ -30,6 +32,9 @@ interface AccountTabProps {
   loading: boolean;
   error: string | null;
   signedInAs: string;
+  initialCard?: StatCardKey | null;
+  onClearInitialCard?: () => void;
+  onNavigate?: (tab: TabKey) => void;
   onComeOfAge?: () => Promise<void> | void;
 }
 
@@ -117,7 +122,7 @@ function itemsFor(
             id: `case-off-${c.connectionId}-${i}`,
             tone: "bad" as Tone,
             logo: { src: c.gameImageUrl, appId: c.gameId, provider: c.gameProvider, name: c.gameName },
-            title: <><strong>{c.gameName}</strong> — {c.offenceType}</>,
+            title: <><strong>{c.gameName}</strong> — {offenceLabel(c.offenceType)}</>,
             meta: `${sourceLabel(c.source)} · ${formatDate(c.timestamp)}${c.recordStatus === "appealed" ? " · appeal under review" : ""}`,
             tag: c.recordStatus === "appealed" ? "appealed" : `score ${c.score}`,
           }));
@@ -137,7 +142,7 @@ function itemsFor(
               id: `local-${i}`,
               tone: "bad" as Tone,
               logo: thisGame,
-              title: <><strong>{thisGame.name}</strong> — {c.offenceType}</>,
+              title: <><strong>{thisGame.name}</strong> — {offenceLabel(c.offenceType)}</>,
               meta: `${sourceLabel(c.source)} · ${formatDate(c.timestamp)}${underAppeal ? " · appeal under review" : ""}`,
               tag: underAppeal ? "appealed" : `score ${c.score}`,
             }));
@@ -171,13 +176,12 @@ function itemsFor(
           id: `open-${c.connectionId}-${i}`,
           tone: c.status.toLowerCase() === "appealed" || c.recordStatus === "appealed" ? "accent" : "warn",
           logo: { src: c.gameImageUrl, appId: c.gameId, provider: c.gameProvider, name: c.gameName },
-          title: <><strong>{c.gameName}</strong> — {c.offenceType}</>,
+          title: <><strong>{c.gameName}</strong> — {offenceLabel(c.offenceType)}</>,
           meta: `${sourceLabel(c.source)} · ${formatDate(c.timestamp)}`,
           tag: c.recordStatus === "appealed" ? "appealed" : c.status,
         }));
     }
     case "games": {
-      // Every linked game — clean or banned — not just games with offences.
       return connections.map((c, i) => ({
         id: `game-${i}`,
         tone: bannedConnectionIds.has(c.connectionId) ? "bad" : "accent",
@@ -204,8 +208,19 @@ function itemsFor(
   }
 }
 
-export function AccountTab({ token, result, profile, loading, error, signedInAs, onComeOfAge }: AccountTabProps) {
-  const [openCard, setOpenCard] = useState<StatCardKey | null>(null);
+export function AccountTab({
+  token,
+  result,
+  profile,
+  loading,
+  error,
+  signedInAs,
+  initialCard = null,
+  onClearInitialCard,
+  onNavigate,
+  onComeOfAge,
+}: AccountTabProps) {
+  const [openCard, setOpenCard] = useState<StatCardKey | null>(initialCard);
   const [preview, setPreview] = useState<PreviewValues | null>(null);
   const [scorePreview, setScorePreview] = useState<number | null>(null);
   const [comingOfAge, setComingOfAge] = useState(false);
@@ -213,6 +228,13 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [bans, setBans] = useState<BanView[]>([]);
   const [allCases, setAllCases] = useState<AnnotatedCase[]>([]);
+
+  useEffect(() => {
+    if (initialCard) {
+      setOpenCard(initialCard);
+      onClearInitialCard?.();
+    }
+  }, [initialCard, onClearInitialCard]);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,8 +280,17 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   }
   if (!result || loading) {
     return (
-      <div className="panel panel--empty" aria-busy={loading}>
-        <p className="muted">{loading ? "Loading your account…" : "No data yet."}</p>
+      <div className="account" aria-busy="true" aria-label="Loading your account">
+        <section className="account__top">
+          <div className="skeleton skeleton--panel" />
+          <div className="skeleton skeleton--panel" />
+        </section>
+        <section className="account__stats">
+          <div className="skeleton skeleton--metric" />
+          <div className="skeleton skeleton--metric" />
+          <div className="skeleton skeleton--metric" />
+          <div className="skeleton skeleton--metric" />
+        </section>
       </div>
     );
   }
@@ -275,7 +306,6 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
     games: m.linkedGames,
     bans: m.activeBans,
   };
-  // When the dev tier preview is active, the stat cards + modal use the previewed numbers.
   const valueByCard = preview ?? realValues;
   const gaugeScore = scorePreview ?? m.trustScore;
   const gaugeVerdict = scorePreview === null ? m.verdict : verdictLabel(gaugeScore);
@@ -292,7 +322,6 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
           gameProvider: result.gameProvider,
           recordStatus: result.status,
         }));
-  // Overturned sanctions are revoked, so confirmed cases on overturned games don't count here.
   const confirmedCases = displayedCases.filter(
     (c) => c.recordStatus !== "overturned" && c.status.toLowerCase() === "confirmed",
   );
@@ -307,7 +336,7 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
     if (comingOfAge || !onComeOfAge) return;
     setComingOfAge(true);
     setComeOfAgeError(null);
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 1500));
     try {
       await onComeOfAge();
     } catch (err) {
@@ -449,16 +478,22 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
                       {` · ${b.appealable ? "appealable" : "final — not appealable"}`}
                     </span>
                   </div>
-                  <span className={`pill ${b.appealable ? "" : "pill--bad"}`}>
-                    {b.appealable ? "Appealable" : "Final"}
-                  </span>
+                  {b.appealable && onNavigate ? (
+                    <button type="button" className="btn btn--primary btn--sm" onClick={() => onNavigate("appeals")}>
+                      Appeal →
+                    </button>
+                  ) : (
+                    <span className={`pill ${b.appealable ? "" : "pill--bad"}`}>
+                      {b.appealable ? "Appealable" : "Final"}
+                    </span>
+                  )}
                 </li>
               ))}
               {confirmedCases.map((c, i) => (
                 <li key={`case-${c.connectionId}-${i}`} className="banlist__item">
                   <GameLogo src={c.gameImageUrl} appId={c.gameId} name={c.gameName} provider={c.gameProvider} width={64} />
                   <div className="banlist__body">
-                    <span className="banlist__title"><strong>{c.gameName}</strong> · {c.offenceType}</span>
+                    <span className="banlist__title"><strong>{c.gameName}</strong> · {offenceLabel(c.offenceType)}</span>
                     <span className="muted">{sourceLabel(c.source)} · {formatDate(c.timestamp)}</span>
                   </div>
                   <span className="pill">score {c.score}</span>
@@ -471,7 +506,14 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
         <article className="panel">
           <div className="panel__head">
             <h2>Case history</h2>
-            <span className="chip chip--muted">{displayedCases.length}</span>
+            <div className="panel__head-right">
+              <span className="chip chip--muted">{displayedCases.length}</span>
+              {onNavigate && (
+                <button type="button" className="linkbtn panel__link" onClick={() => onNavigate("record")}>
+                  Full record →
+                </button>
+              )}
+            </div>
           </div>
           {displayedCases.length === 0 ? (
             <p className="muted">No cases on your record yet.</p>
@@ -480,7 +522,7 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
               {displayedCases.map((c, i) => (
                 <li key={`${c.connectionId}-${c.timestamp}-${i}`} className="caselist__item">
                   <span className={`source-badge source-badge--${c.source}`}>{sourceLabel(c.source)}</span>
-                  <span className="caselist__offence"><strong>{c.gameName}</strong> · {c.offenceType}</span>
+                  <span className="caselist__offence"><strong>{c.gameName}</strong> · {offenceLabel(c.offenceType)}</span>
                   <span className={`status-badge status-badge--${c.status.toLowerCase()}`}>{c.status}</span>
                   <span className="muted caselist__when">{formatDate(c.timestamp)}</span>
                 </li>

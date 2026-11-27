@@ -83,7 +83,7 @@ start engine "$C_ENGINE" "detection-engine" \
   ".venv/bin/uvicorn detection_engine.app:app --host 127.0.0.1 --port ${ENGINE_PORT} ${RELOAD_FLAG}"
 log "starting accountability-svc → http://localhost:${API_PORT}/q/dev  (boots Postgres + Kafka via Dev Services)"
 start api "$C_API" "accountability-service" \
-  "DETECTION_ENGINE_URL=http://localhost:${ENGINE_PORT} mvn --no-transfer-progress quarkus:dev -Dquarkus.http.port=${API_PORT}"
+  "DETECTION_ENGINE_URL=http://localhost:${ENGINE_PORT} mvn --no-transfer-progress quarkus:dev -Dquarkus.http.port=${API_PORT} -Dquarkus.analytics.disabled=true"
 log "starting player-portal      → http://localhost:${PORTAL_PORT}"
 start portal "$C_PORTAL" "player-portal" \
   "npm run dev -- --port ${PORTAL_PORT} --strictPort"

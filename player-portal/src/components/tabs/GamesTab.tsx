@@ -16,6 +16,7 @@ import {
 import { TOXIC_CHAT } from "../../features/presets";
 import { isMatureGame } from "../../features/maturity";
 import { DEMO_CONTROLS_ENABLED } from "../../features/demo";
+import type { TabKey } from "../AppShell";
 import { StatDetailDialog } from "../StatDetailDialog";
 import { GameLogo } from "../GameLogo";
 
@@ -23,6 +24,7 @@ interface GamesTabProps {
   token: string;
   profile?: ProfileView | null;
   onChanged?: () => void;
+  onNavigate?: (tab: TabKey, opts?: { gameFilter?: string }) => void;
   onSubmitSample: (submission: SampleSubmission) => Promise<ResultView | null>;
   onSimulateAntiCheat: (request: SimulateAntiCheatRequest) => Promise<ResultView | null>;
   onSimulateBan: (request: SimulateBanRequest) => Promise<ResultView | null>;
@@ -33,6 +35,13 @@ interface Provider {
   label: string;
 }
 
+interface NoticeState {
+  text: string;
+  actionLabel?: string;
+  actionTab?: TabKey;
+  gameFilter?: string;
+}
+
 /** Publisher identity providers shown as "Connect with" options (mocked OAuth in the prototype). */
 const CORE_PROVIDERS: Provider[] = [
   { id: "steam", label: "Steam" },
@@ -41,6 +50,17 @@ const CORE_PROVIDERS: Provider[] = [
   { id: "epic", label: "Epic Games" },
   { id: "xbox", label: "Xbox" },
   { id: "psn", label: "PlayStation" },
+];
+
+/** Quick-search chips shown before typing so humans can link popular titles in 2 clicks. */
+const POPULAR_SEARCHES = [
+  "Overwatch 2",
+  "Apex Legends",
+  "Rocket League",
+  "Fortnite",
+  "League of Legends",
+  "Dota 2",
+  "Minecraft",
 ];
 
 /** Display labels for every provider a catalogue hit might carry. */
@@ -101,7 +121,7 @@ function BanSimControl({
       <button
         type="button"
         className="btn btn--ghost btn--sm btn--demo"
-        title="Dev: simulate a typed operator ban on this game"
+        title="Demo: simulate a typed operator ban on this game"
         disabled={disabled}
         onClick={() => onSimulateBan({ connectionId, ...BAN_OPTIONS[idx].req })}
       >
@@ -111,15 +131,23 @@ function BanSimControl({
   );
 }
 
-export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulateAntiCheat, onSimulateBan }: GamesTabProps) {
+export function GamesTab({
+  token,
+  profile,
+  onChanged,
+  onNavigate,
+  onSubmitSample,
+  onSimulateAntiCheat,
+  onSimulateBan,
+}: GamesTabProps) {
   const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<NoticeState | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmUnlinkId, setConfirmUnlinkId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  // Guardian-controlled minor without 18+ consent: 18+ games are blocked.
   const blockMature = (profile?.guardianControlled ?? false) && !(profile?.matureAccessAllowed ?? true);
 
   const reload = useCallback(async () => {
@@ -138,15 +166,18 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
     void reload();
   }, [reload]);
 
-  async function handleUnlink(connectionId: string) {
+  const linkedGameIds = useMemo(() => new Set(connections.map((c) => c.gameId)), [connections]);
+
+  async function handleUnlink(c: ConnectionView) {
     setError(null);
     setNotice(null);
-    setBusyId(connectionId);
+    setConfirmUnlinkId(null);
+    setBusyId(c.connectionId);
     try {
-      await removeConnection(token, connectionId);
-      setConnections((prev) => prev.filter((c) => c.connectionId !== connectionId));
+      await removeConnection(token, c.connectionId);
+      setConnections((prev) => prev.filter((item) => item.connectionId !== c.connectionId));
       onChanged?.();
-      setNotice("Game unlinked from your identity.");
+      setNotice({ text: `${c.gameName} was unlinked from your identity.` });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not unlink game. Please try again.");
       void reload();
@@ -155,13 +186,17 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
     }
   }
 
-  async function runDemoAction(connectionId: string, action: () => Promise<ResultView | null>, successMessage: (r: ResultView | null) => string) {
+  async function runDemoAction(
+    connectionId: string,
+    action: () => Promise<ResultView | null>,
+    buildNotice: (r: ResultView | null) => NoticeState,
+  ) {
     setError(null);
     setNotice(null);
     setBusyId(connectionId);
     try {
       const updated = await action();
-      setNotice(successMessage(updated));
+      setNotice(buildNotice(updated));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed. Check that the backend and detection engine are running.");
     } finally {
@@ -179,7 +214,12 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
     void runDemoAction(
       c.connectionId,
       () => onSubmitSample(submission),
-      (r) => `Conduct sample scored for ${c.gameName}${r?.conductScore != null ? ` (score ${r.conductScore}, status: ${r.status ?? "pending"})` : ""} — view in My Record.`,
+      (r) => ({
+        text: `Conduct report scored for ${c.gameName}${r?.conductScore != null ? ` (toxicity ${r.conductScore}/100, pending review)` : ""}.`,
+        actionLabel: "View in My Record →",
+        actionTab: "record",
+        gameFilter: c.connectionId,
+      }),
     );
   }
 
@@ -187,7 +227,11 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
     void runDemoAction(
       c.connectionId,
       () => onSimulateAntiCheat({ connectionId: c.connectionId, operatorId: c.operatorId, gameId: c.gameId }),
-      (r) => `External anti-cheat verdict ingested for ${c.gameName}${r ? ` (global trust now ${r.globalTrustScore}/100)` : ""} — view in My Record or Appeals.`,
+      (r) => ({
+        text: `External anti-cheat verdict ingested for ${c.gameName}${r ? ` — global trust is now ${r.globalTrustScore}/100` : ""}.`,
+        actionLabel: "Review in Appeals →",
+        actionTab: "appeals",
+      }),
     );
   }
 
@@ -195,7 +239,12 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
     void runDemoAction(
       c.connectionId,
       () => onSimulateBan(req),
-      (r) => `Simulated ${req.banType} ban applied on ${c.gameName}${r ? ` (global trust now ${r.globalTrustScore}/100)` : ""} — view in My Record or Account.`,
+      (r) => ({
+        text: `Simulated ${req.banType} ban applied on ${c.gameName}${r ? ` — global trust is now ${r.globalTrustScore}/100` : ""}.`,
+        actionLabel: req.appealable ? "Open Appeals →" : "View in My Record →",
+        actionTab: req.appealable ? "appeals" : "record",
+        gameFilter: req.appealable ? undefined : c.connectionId,
+      }),
     );
   }
 
@@ -215,10 +264,31 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
       </section>
 
       {error && <p className="alert alert--error" role="alert">{error}</p>}
-      {notice && <p className="alert alert--info" role="status">{notice}</p>}
+      {notice && (
+        <div className="alert alert--info alert--row" role="status">
+          <span>{notice.text}</span>
+          <div className="alert__actions">
+            {notice.actionLabel && notice.actionTab && onNavigate && (
+              <button
+                type="button"
+                className="linkbtn"
+                onClick={() => onNavigate(notice.actionTab!, { gameFilter: notice.gameFilter })}
+              >
+                {notice.actionLabel}
+              </button>
+            )}
+            <button type="button" className="alert__dismiss" aria-label="Dismiss notice" onClick={() => setNotice(null)}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
-        <div className="panel panel--empty"><p className="muted">Loading your games…</p></div>
+        <div className="skeleton-stack" aria-busy="true" aria-label="Loading linked games">
+          <div className="skeleton skeleton--gamecard" />
+          <div className="skeleton skeleton--gamecard" />
+        </div>
       ) : connections.length === 0 ? (
         <div className="panel games__empty">
           <span className="games__emptyicon" aria-hidden="true">🎮</span>
@@ -228,35 +298,99 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
         </div>
       ) : (
         <ul className="gamelist">
-          {connections.map((c) => (
-            <li key={c.connectionId} className="gamecard">
-              <GameLogo src={c.imageUrl} appId={c.gameId} name={c.gameName} provider={c.provider} width={92} />
-              <div className="gamecard__body">
-                <span className="gamecard__name">{c.gameName}</span>
-                <span className="muted gamecard__meta">
-                  <span className="provider-badge">{providerLabel(c.provider)}</span>
-                  {c.operatorAccountRef ? ` · ${c.operatorAccountRef}` : ""}
-                  {c.linkedAt ? ` · linked ${new Date(c.linkedAt).toLocaleDateString()}` : ""}
-                </span>
-              </div>
-              <div className="gamecard__actions">
+          {connections.map((c) => {
+            const isBusy = busyId === c.connectionId;
+            const confirmingUnlink = confirmUnlinkId === c.connectionId;
+            return (
+              <li key={c.connectionId} className="gamecard gamecard--stacked">
+                <div className="gamecard__main">
+                  <GameLogo src={c.imageUrl} appId={c.gameId} name={c.gameName} provider={c.provider} width={92} />
+                  <div className="gamecard__body">
+                    <span className="gamecard__name">{c.gameName}</span>
+                    <span className="muted gamecard__meta">
+                      <span className="provider-badge">{providerLabel(c.provider)}</span>
+                      {c.operatorAccountRef ? ` · ${c.operatorAccountRef}` : ""}
+                      {c.linkedAt ? ` · linked ${new Date(c.linkedAt).toLocaleDateString()}` : ""}
+                    </span>
+                  </div>
+                  <div className="gamecard__primary-actions">
+                    {onNavigate && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={isBusy}
+                        onClick={() => onNavigate("record", { gameFilter: c.connectionId })}
+                      >
+                        View record
+                      </button>
+                    )}
+                    {confirmingUnlink ? (
+                      <span className="unlink-confirm" role="group" aria-label={`Confirm unlinking ${c.gameName}`}>
+                        <button
+                          type="button"
+                          className="btn btn--danger btn--sm"
+                          disabled={isBusy}
+                          onClick={() => handleUnlink(c)}
+                        >
+                          Confirm unlink
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={isBusy}
+                          onClick={() => setConfirmUnlinkId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={isBusy}
+                        onClick={() => setConfirmUnlinkId(c.connectionId)}
+                      >
+                        Unlink
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {DEMO_CONTROLS_ENABLED && (
-                  <>
-                    <button type="button" className="btn btn--ghost btn--sm" disabled={busyId === c.connectionId} onClick={() => simulateToxic(c)} title="Demo: submit a toxic conduct sample for this game">
-                      Simulate report
-                    </button>
-                    <button type="button" className="btn btn--ghost btn--sm btn--demo" disabled={busyId === c.connectionId} onClick={() => simulateAntiCheat(c)} title="Demo: land a simulated anti-cheat verdict for this game">
-                      Simulate anti-cheat
-                    </button>
-                    <BanSimControl connectionId={c.connectionId} disabled={busyId === c.connectionId} onSimulateBan={(req) => handleSimBan(c, req)} />
-                  </>
+                  <div className="gamecard__demo">
+                    <span className="gamecard__demolabel">
+                      {isBusy ? "Running simulation…" : "Demo sandbox:"}
+                    </span>
+                    <div className="gamecard__actions">
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={isBusy}
+                        onClick={() => simulateToxic(c)}
+                        title="Demo: submit a toxic conduct sample for this game"
+                      >
+                        Simulate report
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm btn--demo"
+                        disabled={isBusy}
+                        onClick={() => simulateAntiCheat(c)}
+                        title="Demo: land a simulated anti-cheat verdict for this game"
+                      >
+                        Simulate anti-cheat
+                      </button>
+                      <BanSimControl
+                        connectionId={c.connectionId}
+                        disabled={isBusy}
+                        onSimulateBan={(req) => handleSimBan(c, req)}
+                      />
+                    </div>
+                  </div>
                 )}
-                <button type="button" className="btn btn--ghost btn--sm" disabled={busyId === c.connectionId} onClick={() => handleUnlink(c.connectionId)}>
-                  Unlink
-                </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -264,10 +398,11 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
         <AddGameModal
           token={token}
           blockMature={blockMature}
+          linkedGameIds={linkedGameIds}
           onClose={() => setAddOpen(false)}
-          onLinked={() => {
+          onLinked={(gameName) => {
             setAddOpen(false);
-            setNotice("Game linked to your identity.");
+            setNotice({ text: `${gameName} is now linked to your identity.` });
             void reload();
             onChanged?.();
           }}
@@ -280,13 +415,15 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
 function AddGameModal({
   token,
   blockMature,
+  linkedGameIds,
   onClose,
   onLinked,
 }: {
   token: string;
   blockMature: boolean;
+  linkedGameIds: Set<string>;
   onClose: () => void;
-  onLinked: () => void;
+  onLinked: (gameName: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GameSearchResult[]>([]);
@@ -297,7 +434,6 @@ function AddGameModal({
   const [searchError, setSearchError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
-  // Core sign-ins plus the selected game's native launcher (so e.g. Epic appears for Rocket League).
   const providerOptions = useMemo(() => {
     const native = selected?.provider;
     const base = CORE_PROVIDERS.map((p) => p.id);
@@ -308,6 +444,7 @@ function AddGameModal({
   function choose(game: GameSearchResult) {
     setSelected(game);
     setProvider(game.provider ?? "steam");
+    setSearchError(null);
   }
 
   const trimmed = query.trim();
@@ -316,6 +453,7 @@ function AddGameModal({
     if (timer.current) window.clearTimeout(timer.current);
     if (trimmed.length < 2) {
       setResults([]);
+      setSearching(false);
       return;
     }
     timer.current = window.setTimeout(async () => {
@@ -329,7 +467,7 @@ function AddGameModal({
       } finally {
         setSearching(false);
       }
-    }, 350);
+    }, 280);
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
@@ -342,8 +480,7 @@ function AddGameModal({
       return;
     }
     setConnecting(true);
-    // Mocked publisher OAuth: in production this is a real redirect/consent to the publisher.
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 1500));
     try {
       await createConnection(token, {
         gameId: selected.id,
@@ -354,7 +491,7 @@ function AddGameModal({
         imageUrl: selected.imageUrl ?? undefined,
         mature: isMatureGame(selected.name),
       });
-      onLinked();
+      onLinked(selected.name);
     } catch (err) {
       setConnecting(false);
       if (err instanceof ApiError && err.status === 403) {
@@ -427,29 +564,60 @@ function AddGameModal({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Overwatch, Dota 2, Rocket League…"
+              placeholder="e.g. Overwatch 2, Dota 2, Rocket League…"
               autoFocus
             />
           </label>
 
-          {searching && <p className="muted">Searching…</p>}
-          {searchError && <p className="muted">{searchError}</p>}
+          {trimmed.length < 2 && (
+            <div className="popular-picks">
+              <span className="muted popular-picks__label">Popular titles</span>
+              <div className="popular-chips">
+                {POPULAR_SEARCHES.map((title) => (
+                  <button
+                    key={title}
+                    type="button"
+                    className="popular-chip"
+                    onClick={() => setQuery(title)}
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searching && (
+            <div className="skeleton-stack" aria-busy="true">
+              <div className="skeleton skeleton--row" />
+              <div className="skeleton skeleton--row" />
+            </div>
+          )}
+          {searchError && <p className="alert alert--error" role="alert">{searchError}</p>}
           {!searching && trimmed.length >= 2 && results.length === 0 && !searchError && (
-            <p className="muted">No games found for “{trimmed}”.</p>
+            <p className="muted">No games found for “{trimmed}”. Try another title or shorter keyword.</p>
           )}
 
           <ul className="searchlist">
             {results.map((g) => {
               const mature = isMatureGame(g.name);
               const locked = mature && blockMature;
+              const alreadyLinked = linkedGameIds.has(g.id);
               return (
                 <li key={g.id}>
-                  <button type="button" className={`searchlist__item ${locked ? "searchlist__item--locked" : ""}`} onClick={() => choose(g)}>
+                  <button
+                    type="button"
+                    className={`searchlist__item ${locked ? "searchlist__item--locked" : ""} ${alreadyLinked ? "searchlist__item--linked" : ""}`}
+                    disabled={alreadyLinked}
+                    onClick={() => choose(g)}
+                  >
                     <GameLogo src={g.imageUrl} appId={g.id} name={g.name} provider={g.provider} width={92} />
                     <span className="searchlist__name">{g.name}</span>
                     {mature && <span className="age-badge" title="Rated 18+">18+</span>}
                     {g.provider && <span className="provider-badge">{providerLabel(g.provider)}</span>}
-                    <span className="searchlist__cta" aria-hidden="true">{locked ? "Blocked" : "Connect →"}</span>
+                    <span className="searchlist__cta" aria-hidden="true">
+                      {alreadyLinked ? "Linked ✓" : locked ? "Blocked" : "Connect →"}
+                    </span>
                   </button>
                 </li>
               );

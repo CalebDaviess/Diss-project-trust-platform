@@ -20,7 +20,8 @@ param(
     [int]$ApiPort = 8081,
     [int]$PortalPort = 5173,
     [switch]$NoReload,
-    [switch]$NoOpen
+    [switch]$NoOpen,
+    [switch]$NoDocker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,19 +38,24 @@ function Write-Warn([string]$Message) {
 Write-Boot "Trust Platform - local boot (Windows)"
 
 # --- Container runtime check (PostgreSQL + Kafka via Quarkus Dev Services) ---
-$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-if (-not $dockerCmd) {
-    Write-Warn "Docker not found on PATH - Quarkus Dev Services cannot start Postgres/Kafka."
-} else {
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        & docker info *> $null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Docker daemon is not running. Start Docker Desktop so Quarkus Dev Services can boot Postgres + Kafka."
+$useLocalH2 = $NoDocker.IsPresent
+if (-not $useLocalH2) {
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $dockerCmd) {
+        Write-Warn "Docker not found on PATH - falling back to local H2 + in-memory messaging."
+        $useLocalH2 = $true
+    } else {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & docker info *> $null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "Docker daemon is not running - falling back to local H2 + in-memory messaging (start Docker Desktop for Postgres + Kafka)."
+                $useLocalH2 = $true
+            }
+        } finally {
+            $ErrorActionPreference = $prevEap
         }
-    } finally {
-        $ErrorActionPreference = $prevEap
     }
 }
 
@@ -128,8 +134,9 @@ if (-not (Test-Path (Join-Path $portalDir "node_modules"))) {
 # --- Launch all three services as managed background jobs --------------------
 $reloadArgs = if ($NoReload) { "" } else { "--reload" }
 
+$apiModeNote = if ($useLocalH2) { "(local H2 + in-memory messaging)" } else { "(boots Postgres + Kafka via Dev Services)" }
 Write-Boot "starting detection-engine   -> http://localhost:$EnginePort/docs"
-Write-Boot "starting accountability-svc -> http://localhost:$ApiPort/q/dev  (boots Postgres + Kafka via Dev Services)"
+Write-Boot "starting accountability-svc -> http://localhost:$ApiPort/q/dev  $apiModeNote"
 Write-Boot "starting player-portal      -> http://localhost:$PortalPort"
 
 $procs = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
@@ -181,9 +188,10 @@ try {
         $jdk = Get-ChildItem "C:\Program Files\Java\jdk-21*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($jdk) { $apiEnv["JAVA_HOME"] = $jdk.FullName }
     }
+    $apiProfileArgs = if ($useLocalH2) { "-Plocal-h2 -Dquarkus.profile=dev,local-h2" } else { "-Dapi.version=1.44" }
     Start-ServiceProcess -Name "api" -Color Yellow -WorkDir $apiDir `
         -FilePath "cmd.exe" `
-        -Arguments "/c `"$mvnCmd`" --no-transfer-progress quarkus:dev -Dquarkus.http.port=$ApiPort -Dquarkus.console.enabled=false -Dapi.version=1.44" `
+        -Arguments "/c `"$mvnCmd`" --no-transfer-progress $apiProfileArgs quarkus:dev -Dquarkus.http.port=$ApiPort -Dquarkus.console.enabled=false -Dquarkus.analytics.disabled=true" `
         -ExtraEnv $apiEnv | Out-Null
 
     Start-ServiceProcess -Name "portal" -Color Magenta -WorkDir $portalDir `

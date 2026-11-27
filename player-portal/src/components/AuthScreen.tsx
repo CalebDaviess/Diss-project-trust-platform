@@ -43,12 +43,14 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
   // Sign-in fields (prefilled with the dev demo login for one-click entry).
   const [email, setEmail] = useState(DEMO_USER);
   const [password, setPassword] = useState(DEMO_PASS);
+  const [showSignInPw, setShowSignInPw] = useState(false);
 
   // Create-account fields.
   const [over18, setOver18] = useState(true);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
   const [holderName, setHolderName] = useState("");
   const [idType, setIdType] = useState<IdDocumentType>("passport");
   const [dobOnId, setDobOnId] = useState("");
@@ -67,8 +69,10 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
   }, []);
 
   const selectedId = ID_TYPES.find((t) => t.value === idType) ?? ID_TYPES[0];
-  // In adult mode the document is the holder's; in guardian mode it is the parent/guardian's.
   const verifySubject = over18 ? "your" : "the guardian's";
+  const pwLongEnough = newPassword.length >= 8;
+  const pwMatches = confirm.length > 0 && newPassword === confirm;
+  const isUsingDemo = email.trim().toLowerCase() === DEMO_USER.toLowerCase() && password === DEMO_PASS;
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -90,7 +94,7 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
   /**
    * Mock ID "scan & verify": no real upload happens. We read the date of birth entered off the
    * document and check the subject is actually an adult (the holder in adult mode, the guardian in
-   * under-18 mode). The age check is what gates full access vs parental access.
+   * under-18 mode).
    */
   function startIdUpload() {
     if (uploading) return;
@@ -115,13 +119,13 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
         return;
       }
       setIdUploaded(true);
-    }, 2000);
+    }, 1500);
   }
 
   function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     setLocalError(null);
-    if (newPassword.length < 8) {
+    if (!pwLongEnough) {
       setLocalError("Password must be at least 8 characters.");
       return;
     }
@@ -190,7 +194,7 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
           <ul className="auth__points">
             <li><span aria-hidden="true">✦</span> A global trust score, visible at all times</li>
             <li><span aria-hidden="true">✦</span> Source-attributed cases &amp; a full activity log</li>
-            <li><span aria-hidden="true">✦</span> Cross-game warnings carried by your identity</li>
+            <li><span aria-hidden="true">✦</span> Cross-game warnings &amp; fair due-process appeals</li>
           </ul>
           <p className="auth__scope muted">Dissertation prototype · synthetic data only</p>
         </div>
@@ -236,28 +240,53 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
               </label>
               <label className="field">
                 <span>Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  required
-                />
+                <div className="password-wrap">
+                  <input
+                    type={showSignInPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowSignInPw((v) => !v)}
+                    aria-label={showSignInPw ? "Hide password" : "Show password"}
+                  >
+                    {showSignInPw ? "Hide" : "Show"}
+                  </button>
+                </div>
               </label>
               {shownError && <p className="alert alert--error" role="alert">{shownError}</p>}
               <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
                 {busy ? "Signing in…" : "Sign in"}
               </button>
-              <p className="muted auth__hint">
-                Demo login prefilled: <code>{DEMO_USER}</code> / <code>demo-password</code>.
-              </p>
+              <div className="auth__hint-row">
+                <p className="muted auth__hint">
+                  Demo account: <code>{DEMO_USER}</code> / <code>demo-password</code>
+                </p>
+                {!isUsingDemo && (
+                  <button
+                    type="button"
+                    className="linkbtn auth__hint"
+                    onClick={() => {
+                      setEmail(DEMO_USER);
+                      setPassword(DEMO_PASS);
+                    }}
+                  >
+                    Fill demo login
+                  </button>
+                )}
+              </div>
             </form>
           ) : (
             <form className="auth__form" onSubmit={handleCreate} aria-label="Create account">
               <h2>Create your account</h2>
               <p className="muted">Set your details and verify an ID. Under 18s need a parent or guardian.</p>
 
+              <p className="step-heading"><span className="step-heading__num">1</span> Age check</p>
               <fieldset className="agegate">
                 <legend>Are you 18 or over?</legend>
                 <div className="agegate__opts">
@@ -280,6 +309,7 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
                 </div>
               </fieldset>
 
+              <p className="step-heading"><span className="step-heading__num">2</span> Account details</p>
               {!over18 && (
                 <label className="field">
                   <span>Player's name</span>
@@ -307,19 +337,29 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
               <div className="field-grid">
                 <label className="field">
                   <span>Password</span>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    autoComplete="new-password"
-                    placeholder="At least 8 characters"
-                    required
-                  />
+                  <div className="password-wrap">
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                      placeholder="8+ characters"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowNewPw((v) => !v)}
+                      aria-label={showNewPw ? "Hide password" : "Show password"}
+                    >
+                      {showNewPw ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </label>
                 <label className="field">
                   <span>Confirm password</span>
                   <input
-                    type="password"
+                    type={showNewPw ? "text" : "password"}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     autoComplete="new-password"
@@ -328,6 +368,16 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
                   />
                 </label>
               </div>
+              {(newPassword.length > 0 || confirm.length > 0) && (
+                <div className="pw-checks" aria-live="polite">
+                  <span className={`pw-check ${pwLongEnough ? "is-ok" : ""}`}>
+                    {pwLongEnough ? "✓" : "○"} 8+ characters
+                  </span>
+                  <span className={`pw-check ${pwMatches ? "is-ok" : ""}`}>
+                    {pwMatches ? "✓" : "○"} Passwords match
+                  </span>
+                </div>
+              )}
 
               {!over18 && (
                 <div className="guardian">
@@ -348,6 +398,7 @@ export function AuthScreen({ busy, error, onLogin, onRegister, theme, onToggleTh
                 </div>
               )}
 
+              <p className="step-heading"><span className="step-heading__num">3</span> Identity verification</p>
               <div className="idverify">
                 <div className="field-grid">
                   <label className="field">

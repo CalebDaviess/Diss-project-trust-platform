@@ -247,5 +247,21 @@
                 </plugins>
             </build>
         </profile>
+        <profile>
+            <id>local-h2</id>
+            <!-- Opt-in local dev fallback when Docker is not running: uses H2 (PostgreSQL mode)
+                 and the in-memory Reactive Messaging connector instead of Postgres/Kafka containers.
+                 Never active during default builds, CI, or Docker/production packaging. -->
+            <dependencies>
+                <dependency>
+                    <groupId>io.quarkus</groupId>
+                    <artifactId>quarkus-jdbc-h2</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.smallrye.reactive</groupId>
+                    <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
     </profiles>
 </project>
