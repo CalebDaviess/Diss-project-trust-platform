@@ -1,4 +1,4 @@
-name: Build & Publish Docker Images
+name: Build, Test & Publish Docker Images
 
 on:
   push:
@@ -9,6 +9,16 @@ on:
       - "accountability-service/**"
       - "player-portal/**"
       - "docker-compose.yml"
+      - "DOCKERHUB_README.md"
+      - ".github/workflows/docker-publish.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "detection-engine/**"
+      - "accountability-service/**"
+      - "player-portal/**"
+      - "docker-compose.yml"
+      - "DOCKERHUB_README.md"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
 
@@ -17,8 +27,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Stage 1: Automated test gate across all 3 services ──────────────────────
+  test-engine:
+    name: Test detection-engine (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: detection-engine/pyproject.toml
+      - name: Install & run pytest
+        working-directory: detection-engine
+        env:
+          MPLBACKEND: Agg
+        run: |
+          pip install -e ".[dev]"
+          pytest -q
+
+  test-api:
+    name: Test accountability-service (JUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run Quarkus JUnit tests
+        working-directory: accountability-service
+        run: |
+          sed -i 's/\r$//' mvnw generate-jwt-keys.sh
+          chmod +x mvnw generate-jwt-keys.sh
+          ./mvnw -B --no-transfer-progress test
+
+  test-portal:
+    name: Test & build player-portal (Vitest + Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: player-portal/package-lock.json
+      - name: Install, test, and build
+        working-directory: player-portal
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  # ── Stage 2: Build, push multi-arch images & sync Docker Hub READMEs ────────
   publish:
     name: Build & push ${{ matrix.service }}
+    needs: [test-engine, test-api, test-portal]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,12 +93,15 @@ jobs:
           - service: detection-engine
             context: ./detection-engine
             repo: trust-platform-engine
+            short_desc: "Trust Platform ML conduct-detection service (FastAPI + scikit-learn)"
           - service: accountability-service
             context: ./accountability-service
             repo: trust-platform-api
+            short_desc: "Trust Platform accountability REST API (Java 21 + Quarkus + Postgres + Kafka)"
           - service: player-portal
             context: ./player-portal
             repo: trust-platform-portal
+            short_desc: "Trust Platform Player Portal web UI (React + Nginx)"
 
     steps:
       - name: Checkout repository
@@ -81,3 +150,12 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Sync Docker Hub Overview README
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.repo }}
+          short-description: ${{ matrix.short_desc }}
+          readme-filepath: ./DOCKERHUB_README.md

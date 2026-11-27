@@ -20,12 +20,12 @@ The empirical core is **conduct classification on synthetic numerical features**
 - [x] Containerise all 3 services (`detection-engine`, `accountability-service`, `player-portal`) + PostgreSQL 16 & Apache Kafka 3.9 (KRaft) in root `docker-compose.yml` (ephemeral runtime JWT keys, Nginx `/api` proxy, non-root containers)
 - [x] Set up GitHub Actions multi-arch (`linux/amd64`, `linux/arm64`) auto-build & publish to Docker Hub (`calebdavies03/trust-platform-*`) on push to `main` / `v*` tags
 - [x] Verify end-to-end external-user setup (`download docker-compose.yml` → `docker compose up -d --pull always`) and write `DOCKER_INSTRUCTIONS.md` + updated `README.md`
-- [ ] Add `DOCKERHUB_README.md` + auto-sync step in `.github/workflows/docker-publish.yml` so the 3 Docker Hub Overview tabs show run instructions automatically #todo
-- [ ] Add automated CI test gate (`pytest`, `./mvnw test`, `npm test`, `npm run build`) before Docker Hub publish so broken commits never overwrite `:latest` #todo
+- [x] Add `DOCKERHUB_README.md` + auto-sync step in `.github/workflows/docker-publish.yml` so the 3 Docker Hub Overview tabs show run instructions automatically
+- [x] Add automated CI test gate (`pytest`, `./mvnw test`, `npm test`, `npm run build`) before Docker Hub publish so broken commits never overwrite `:latest`
 
 ## Platform-first front end (player-facing dashboard)
 - [x] Rebuild portal so sign-in lands the player on an **account dashboard**: trust score + accountability record (past bans/reports/audit trail) are the hero; conduct-sample submission becomes a secondary/demo panel → [[web-module]]
-- [ ] **Dev demo data**: pre-seed `player@example.com` (opt-in demo flag) with **two linked games and realistic cross-game history** (conduct report, anti-cheat verdict/ban, appealable sanction & audit trail) so Docker testers see a populated dashboard on first login #todo
+- [x] **Dev demo data**: pre-seed `player@example.com` (`DemoHistorySeeder`, guarded by `accountability.auth.seed-demo-history`) with **two linked games and realistic cross-game history** (VALORANT pending conduct report + Counter-Strike 2 confirmed anti-cheat verdict, active appealable ban & audit trail) so Docker testers see a populated dashboard on first login
 - [x] Build a working **age-appropriate access** demo (guardian-controlled minor accounts + `AgeGateDemo`)
 
 ## Ethics & submission
@@ -33,9 +33,10 @@ The empirical core is **conduct classification on synthetic numerical features**
 - [x] Add the approved role/eligibility screener and one example attitude question to the application; the full questionnaire is not yet drafted.
 - [x] Include an optional local Docker demo and anonymous exploratory feedback as an opt-in activity in the ethics description and participant sheets.
 - [x] Package and check the local Docker demo (synthetic accounts/data only, public on Docker Hub `calebdavies03/trust-platform-*`).
+- [x] Address supervisor review comments on ethics form + companion participant sheets (May 2027 window, no child data, moderator permission, safe Docker distribution with SHA-256 digests).
 - [ ] Add the GitHub / Docker demo link and optional feedback items to Microsoft Forms before recruitment. #todo
 - [ ] Confirm the 10-year retention period and the applicable policy with the supervisor.
-- [ ] Ask the supervisor to complete prior participant-research experience; obtain applicant and supervisor signatures/dates.
+- [ ] Obtain applicant and supervisor signatures/dates on the Ethics Declaration (supervisor prior-experience section is completed).
 - [ ] Complete and attach the full survey questionnaire if required; verify final Microsoft Forms settings and participant documents.
 - [ ] Submit the application and wait for approval before recruiting or collecting data.
 - [ ] Create [[Age-Assurance]] note (referenced from [[Research-Questions]] SQ2) #todo
