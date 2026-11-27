@@ -54,6 +54,7 @@ p { margin: 0; }
 
 .alert { border-radius: var(--radius-xs); padding: 0.7rem 0.9rem; font-size: 0.9rem; }
 .alert--error { background: var(--bad-soft); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
+.alert--info { background: var(--accent-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 
 /* ---- Form fields --------------------------------------------------------- */
 .field { display: flex; flex-direction: column; gap: 0.35rem; }

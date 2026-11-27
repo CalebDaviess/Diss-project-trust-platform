@@ -64,7 +64,8 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse authenticate(AuthRequest request) {
-        UserCredential credential = userCredentialRepository.findById(request.username());
+        String username = request.username().trim().toLowerCase();
+        UserCredential credential = userCredentialRepository.findById(username);
         if (credential == null || !passwordHasher.matches(request.password(), credential.passwordHash)) {
             throw new NotAuthorizedException("Invalid username or password");
         }

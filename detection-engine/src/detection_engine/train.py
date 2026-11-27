@@ -39,7 +39,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 
 from .constants import FEATURE_NAMES
-from .features import DEFAULT_SEED, load_dataset, make_split, scale_features
+from .features import DEFAULT_DATASET_PATH, DEFAULT_SEED, load_dataset, make_split, scale_features
+from .generate_dataset import generate_dataset
 
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "model.joblib"
 
@@ -185,11 +186,15 @@ def load_artifact(path: Path = DEFAULT_MODEL_PATH) -> dict:
 
 
 def run_training(seed: int = DEFAULT_SEED, model_path: Path = DEFAULT_MODEL_PATH):
-    """Full Step 3 pipeline: load -> split -> scale -> train/compare -> tune -> save best."""
+    """Full Step 3 pipeline: load (auto-generating if absent) -> split -> scale -> train -> tune -> save."""
     # Local import avoids a circular import (evaluate imports from train).
     from .evaluate import TARGET_MAX_FPR, tune_threshold
 
-    df = load_dataset()
+    if not DEFAULT_DATASET_PATH.exists():
+        DEFAULT_DATASET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        generate_dataset(seed=seed).to_csv(DEFAULT_DATASET_PATH, index=False)
+
+    df = load_dataset(DEFAULT_DATASET_PATH)
     split = make_split(df, seed=seed)
     X_train, X_test, scaler = scale_features(split.X_train, split.X_test)
 

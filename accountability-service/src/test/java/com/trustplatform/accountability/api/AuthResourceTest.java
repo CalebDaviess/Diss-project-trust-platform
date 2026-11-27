@@ -40,6 +40,18 @@ class AuthResourceTest {
     }
 
     @Test
+    void loginIsCaseInsensitiveAndTrimsEmail() {
+        given()
+                .contentType(ContentType.JSON)
+                .body(new AuthRequest("  PLAYER@Example.COM ", DemoUserSeeder.DEMO_PASSWORD))
+                .when().post("/auth")
+                .then()
+                .statusCode(200)
+                .body("token", notNullValue())
+                .body("tokenType", is("Bearer"));
+    }
+
+    @Test
     void loginWithWrongPasswordIsUnauthorized() {
         given()
                 .contentType(ContentType.JSON)

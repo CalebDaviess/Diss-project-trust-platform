@@ -94,3 +94,16 @@ def test_model_version_tags_conduct(tmp_path):
     loaded = load_artifact(model_path)
     assert loaded["model_version"].startswith("conduct-")
 
+
+def test_run_training_autogenerates_missing_dataset(tmp_path, monkeypatch):
+    """Fresh clones / CI runners without conduct_dataset.csv should still train cleanly."""
+    import detection_engine.train as train_mod
+
+    missing_csv = tmp_path / "data" / "conduct_dataset.csv"
+    monkeypatch.setattr(train_mod, "DEFAULT_DATASET_PATH", missing_csv)
+
+    model_path = tmp_path / "model.joblib"
+    run_training(seed=42, model_path=model_path)
+    assert missing_csv.exists()
+    assert model_path.exists()
+

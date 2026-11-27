@@ -111,7 +111,9 @@ public class AccountabilityService {
                 profile, submission.gameConnectionId(), submission.operatorId(), submission.gameId());
         AccountabilityRecord record = findOrCreateRecord(connection, conductScore);
         record.conductScore = conductScore;
-        record.status = AccountabilityStatus.PENDING;
+        if (record.status != AccountabilityStatus.CONFIRMED && record.status != AccountabilityStatus.APPEALED) {
+            record.status = AccountabilityStatus.PENDING;
+        }
 
         CaseEvent caseEvent = buildCaseEvent(
                 conductScore,
@@ -465,7 +467,11 @@ public class AccountabilityService {
         if (offenceType == null || offenceType.isBlank()) {
             return OffenceType.NONE;
         }
-        return OffenceType.fromValue(offenceType);
+        try {
+            return OffenceType.fromValue(offenceType);
+        } catch (IllegalArgumentException ignored) {
+            return OffenceType.NONE;
+        }
     }
 
     private int clampTrustScore(int trustScore) {

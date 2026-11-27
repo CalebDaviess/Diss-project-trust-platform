@@ -215,7 +215,7 @@ export function GamesTab({ token, profile, onChanged, onSubmitSample, onSimulate
       </section>
 
       {error && <p className="alert alert--error" role="alert">{error}</p>}
-      {notice && <p className="alert" role="status">{notice}</p>}
+      {notice && <p className="alert alert--info" role="status">{notice}</p>}
 
       {loading ? (
         <div className="panel panel--empty"><p className="muted">Loading your games…</p></div>

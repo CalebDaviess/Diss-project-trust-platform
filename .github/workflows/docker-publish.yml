@@ -44,6 +44,7 @@ jobs:
           MPLBACKEND: Agg
         run: |
           pip install -e ".[dev]"
+          python -m detection_engine.generate_dataset
           pytest -q
 
   test-api:

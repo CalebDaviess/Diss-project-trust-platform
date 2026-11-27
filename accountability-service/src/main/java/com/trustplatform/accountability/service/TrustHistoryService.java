@@ -39,11 +39,17 @@ public class TrustHistoryService {
             return series;
         }
 
-        Instant createdAt = profile.createdAt != null ? profile.createdAt : now;
-        // Anchor: account creation at the default (100).
-        series.add(new TrustPointView(createdAt, PlayerProfile.DEFAULT_GLOBAL_TRUST_SCORE, "account_created"));
+        List<com.trustplatform.accountability.entity.TrustHistory> stored =
+                trustHistoryRepository.listByProfile(profileId);
+        boolean hasCreatedAnchor = stored.stream().anyMatch(p -> "account_created".equals(p.reason));
+
+        if (!hasCreatedAnchor) {
+            Instant createdAt = profile.createdAt != null ? profile.createdAt : now;
+            // Anchor: account creation at the default (100).
+            series.add(new TrustPointView(createdAt, PlayerProfile.DEFAULT_GLOBAL_TRUST_SCORE, "account_created"));
+        }
         // Each recorded change.
-        trustHistoryRepository.listByProfile(profileId).forEach(point ->
+        stored.forEach(point ->
                 series.add(new TrustPointView(point.occurredAt, point.score, point.reason)));
         // Extend to "now" at the current score so the line reaches today.
         series.add(new TrustPointView(now, profile.globalTrustScore, "current"));

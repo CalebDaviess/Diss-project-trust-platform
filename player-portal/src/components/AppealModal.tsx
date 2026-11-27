@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   submitAppeal,
@@ -33,6 +33,12 @@ export function AppealModal({ token, sanction, onClose, onSubmitted }: AppealMod
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const uploadTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (uploadTimer.current) window.clearTimeout(uploadTimer.current);
+    };
+  }, []);
 
   function addEvidence(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;

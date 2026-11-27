@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -112,6 +111,7 @@ class DemoHistorySeederTest {
                 .when().get("/trust-history")
                 .then()
                 .statusCode(200)
-                .body("$", hasSize(greaterThanOrEqualTo(3)));
+                .body("$", hasSize(4))
+                .body("findAll { it.reason == 'account_created' }.size()", is(1));
     }
 }

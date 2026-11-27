@@ -198,6 +198,73 @@ class AppealResourceTest {
     }
 
     @Test
+    void secondOverturnedAppealOnSameConnectionDoesNotDoubleRestoreTrust() {
+        String token = login();
+        // Drop trust below 100 on another connection so clamping at 100 cannot mask double-restoration.
+        String anchorConn = linkGame(token, "gid-anchor-" + UUID.randomUUID());
+        int baselineTrust = given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(anchorConn, "permanent", null, false))
+                .when().post("/dev/bans/simulate")
+                .then()
+                .statusCode(200)
+                .extract().path("globalTrustScore");
+
+        String targetConn = linkGame(token, "gid-repeat-" + UUID.randomUUID());
+
+        // First ban (-15) -> appeal -> approved (restores back to baselineTrust).
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(targetConn, "temporary", 7, true))
+                .when().post("/dev/bans/simulate")
+                .then().statusCode(200);
+        String firstAppeal = given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SubmitAppealRequest(targetConn, "mistake", "First false positive.", 0))
+                .when().post("/appeals")
+                .then().statusCode(200)
+                .extract().path("appealId");
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new ResolveAppealRequest("approved", "First overturned."))
+                .when().post("/appeals/" + firstAppeal + "/resolve")
+                .then().statusCode(200);
+
+        // Second ban (-15) on the SAME connection -> appeal -> approved must return to baselineTrust,
+        // NOT baselineTrust + 15.
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SimulateBanRequest(targetConn, "temporary", 7, true))
+                .when().post("/dev/bans/simulate")
+                .then().statusCode(200);
+        String secondAppeal = given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new SubmitAppealRequest(targetConn, "mistake", "Second false positive.", 0))
+                .when().post("/appeals")
+                .then().statusCode(200)
+                .extract().path("appealId");
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(new ResolveAppealRequest("approved", "Second overturned."))
+                .when().post("/appeals/" + secondAppeal + "/resolve")
+                .then().statusCode(200);
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when().get("/results/" + targetConn)
+                .then()
+                .statusCode(200)
+                .body("globalTrustScore", is(baselineTrust));
+    }
+
+    @Test
     void appealsRequireAuth() {
         given().when().get("/appeals").then().statusCode(401);
     }

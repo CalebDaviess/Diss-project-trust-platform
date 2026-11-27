@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ApiError,
+  getResult,
   listBans,
   listConnections,
   type BanView,
+  type CaseView,
   type ConnectionView,
   type OffenceSource,
   type ProfileView,
@@ -87,25 +89,46 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-/** Build the drill-in list for a given card from the current result + fetched games/bans. */
+interface AnnotatedCase extends CaseView {
+  connectionId: string;
+  gameId?: string;
+  gameName: string;
+  gameImageUrl?: string | null;
+  gameProvider?: string | null;
+  recordStatus: ResultView["status"];
+}
+
+/** Build the drill-in list for a given card from the current result + fetched games/bans/cases. */
 function itemsFor(
   card: StatCardKey,
   result: ResultView,
   connections: ConnectionView[],
   bans: BanView[],
+  allCases: AnnotatedCase[],
 ): DetailItem[] {
-  const thisGame: DetailLogo = {
-    src: result.gameImageUrl,
-    provider: result.gameProvider,
-    name: result.gameName ?? result.gameConnectionId,
-  };
-  const underAppeal = result.status === "appealed";
-  const overturned = result.status === "overturned";
   const bannedConnectionIds = new Set(bans.map((b) => b.connectionId));
 
   switch (card) {
     case "offences": {
-      // An overturned sanction is revoked, so the current game's confirmed cases are no longer counted.
+      if (allCases.length > 0) {
+        return allCases
+          .filter((c) => c.recordStatus !== "overturned" && c.status.toLowerCase() === "confirmed")
+          .map((c, i) => ({
+            id: `case-off-${c.connectionId}-${i}`,
+            tone: "bad" as Tone,
+            logo: { src: c.gameImageUrl, appId: c.gameId, provider: c.gameProvider, name: c.gameName },
+            title: <><strong>{c.gameName}</strong> — {c.offenceType}</>,
+            meta: `${sourceLabel(c.source)} · ${formatDate(c.timestamp)}${c.recordStatus === "appealed" ? " · appeal under review" : ""}`,
+            tag: c.recordStatus === "appealed" ? "appealed" : `score ${c.score}`,
+          }));
+      }
+      const thisGame: DetailLogo = {
+        src: result.gameImageUrl,
+        provider: result.gameProvider,
+        name: result.gameName ?? result.gameConnectionId,
+      };
+      const underAppeal = result.status === "appealed";
+      const overturned = result.status === "overturned";
       const local: DetailItem[] = overturned
         ? []
         : result.caseHistory
@@ -130,17 +153,29 @@ function itemsFor(
         }));
       return [...local, ...cross];
     }
-    case "open":
-      return result.caseHistory
-        .filter((c) => ["pending", "appealed"].includes(c.status.toLowerCase()))
+    case "open": {
+      const openSource: AnnotatedCase[] =
+        allCases.length > 0
+          ? allCases
+          : result.caseHistory.map((c) => ({
+              ...c,
+              connectionId: result.gameConnectionId,
+              gameName: result.gameName ?? result.gameConnectionId,
+              gameImageUrl: result.gameImageUrl,
+              gameProvider: result.gameProvider,
+              recordStatus: result.status,
+            }));
+      return openSource
+        .filter((c) => ["pending", "appealed"].includes(c.status.toLowerCase()) || c.recordStatus === "appealed")
         .map((c, i) => ({
-          id: `open-${i}`,
-          tone: c.status.toLowerCase() === "appealed" ? "accent" : "warn",
-          logo: thisGame,
-          title: <><strong>{thisGame.name}</strong> — {c.offenceType}</>,
+          id: `open-${c.connectionId}-${i}`,
+          tone: c.status.toLowerCase() === "appealed" || c.recordStatus === "appealed" ? "accent" : "warn",
+          logo: { src: c.gameImageUrl, appId: c.gameId, provider: c.gameProvider, name: c.gameName },
+          title: <><strong>{c.gameName}</strong> — {c.offenceType}</>,
           meta: `${sourceLabel(c.source)} · ${formatDate(c.timestamp)}`,
-          tag: c.status,
+          tag: c.recordStatus === "appealed" ? "appealed" : c.status,
         }));
+    }
     case "games": {
       // Every linked game — clean or banned — not just games with offences.
       return connections.map((c, i) => ({
@@ -177,15 +212,37 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   const [comeOfAgeError, setComeOfAgeError] = useState<string | null>(null);
   const [connections, setConnections] = useState<ConnectionView[]>([]);
   const [bans, setBans] = useState<BanView[]>([]);
+  const [allCases, setAllCases] = useState<AnnotatedCase[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const [conns, banList] = await Promise.all([listConnections(token), listBans(token)]);
+        const perGameResults = await Promise.all(
+          conns.map((c) => getResult(token, c.connectionId).catch(() => null)),
+        );
+        const mergedCases: AnnotatedCase[] = [];
+        perGameResults.forEach((res, idx) => {
+          if (!res) return;
+          const conn = conns[idx];
+          for (const c of res.caseHistory) {
+            mergedCases.push({
+              ...c,
+              connectionId: conn.connectionId,
+              gameId: conn.gameId,
+              gameName: res.gameName ?? conn.gameName,
+              gameImageUrl: res.gameImageUrl ?? conn.imageUrl,
+              gameProvider: res.gameProvider ?? conn.provider,
+              recordStatus: res.status,
+            });
+          }
+        });
+        mergedCases.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (!cancelled) {
           setConnections(conns);
           setBans(banList);
+          setAllCases(mergedCases);
         }
       } catch (err) {
         if (!(err instanceof ApiError)) return;
@@ -208,9 +265,13 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   }
 
   const m = deriveMetrics(result);
+  const openCasesAcrossGames =
+    allCases.length > 0
+      ? allCases.filter((c) => ["pending", "appealed"].includes(c.status.toLowerCase()) || c.recordStatus === "appealed").length
+      : m.openCases;
   const realValues: PreviewValues = {
     offences: m.confirmedOffences,
-    open: m.openCases,
+    open: openCasesAcrossGames,
     games: m.linkedGames,
     bans: m.activeBans,
   };
@@ -220,14 +281,24 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
   const gaugeVerdict = scorePreview === null ? m.verdict : verdictLabel(gaugeScore);
 
   const bannedSignals = bans;
-  // Overturned sanctions are revoked, so the current game's confirmed cases don't count here.
-  const confirmedCases =
-    result.status === "overturned"
-      ? []
-      : result.caseHistory.filter((c) => c.status.toLowerCase() === "confirmed");
+  const displayedCases: AnnotatedCase[] =
+    allCases.length > 0
+      ? allCases
+      : result.caseHistory.map((c) => ({
+          ...c,
+          connectionId: result.gameConnectionId,
+          gameName: result.gameName ?? result.gameConnectionId,
+          gameImageUrl: result.gameImageUrl,
+          gameProvider: result.gameProvider,
+          recordStatus: result.status,
+        }));
+  // Overturned sanctions are revoked, so confirmed cases on overturned games don't count here.
+  const confirmedCases = displayedCases.filter(
+    (c) => c.recordStatus !== "overturned" && c.status.toLowerCase() === "confirmed",
+  );
   const hasSanctions = bannedSignals.length > 0 || confirmedCases.length > 0;
 
-  const detailItems = openCard ? itemsFor(openCard, result, connections, bans) : [];
+  const detailItems = openCard ? itemsFor(openCard, result, connections, bans, allCases) : [];
 
   const guardianControlled = profile?.guardianControlled ?? false;
 
@@ -384,10 +455,10 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
                 </li>
               ))}
               {confirmedCases.map((c, i) => (
-                <li key={`case-${i}`} className="banlist__item">
-                  <GameLogo src={result.gameImageUrl} name={result.gameName ?? result.gameConnectionId} provider={result.gameProvider} width={64} />
+                <li key={`case-${c.connectionId}-${i}`} className="banlist__item">
+                  <GameLogo src={c.gameImageUrl} appId={c.gameId} name={c.gameName} provider={c.gameProvider} width={64} />
                   <div className="banlist__body">
-                    <span className="banlist__title"><strong>{result.gameName ?? result.gameConnectionId}</strong> · {c.offenceType}</span>
+                    <span className="banlist__title"><strong>{c.gameName}</strong> · {c.offenceType}</span>
                     <span className="muted">{sourceLabel(c.source)} · {formatDate(c.timestamp)}</span>
                   </div>
                   <span className="pill">score {c.score}</span>
@@ -400,16 +471,16 @@ export function AccountTab({ token, result, profile, loading, error, signedInAs,
         <article className="panel">
           <div className="panel__head">
             <h2>Case history</h2>
-            <span className="chip chip--muted">{result.caseHistory.length}</span>
+            <span className="chip chip--muted">{displayedCases.length}</span>
           </div>
-          {result.caseHistory.length === 0 ? (
+          {displayedCases.length === 0 ? (
             <p className="muted">No cases on your record yet.</p>
           ) : (
             <ul className="caselist">
-              {result.caseHistory.map((c, i) => (
-                <li key={`${c.timestamp}-${i}`} className="caselist__item">
+              {displayedCases.map((c, i) => (
+                <li key={`${c.connectionId}-${c.timestamp}-${i}`} className="caselist__item">
                   <span className={`source-badge source-badge--${c.source}`}>{sourceLabel(c.source)}</span>
-                  <span className="caselist__offence">{c.offenceType}</span>
+                  <span className="caselist__offence"><strong>{c.gameName}</strong> · {c.offenceType}</span>
                   <span className={`status-badge status-badge--${c.status.toLowerCase()}`}>{c.status}</span>
                   <span className="muted caselist__when">{formatDate(c.timestamp)}</span>
                 </li>

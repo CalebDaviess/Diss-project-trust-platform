@@ -468,6 +468,56 @@ class AccountabilityResourceTest {
         });
     }
 
+    @Test
+    void unknownAntiCheatOffenceTypeFallsBackToNone() {
+        seedLinkedConnection(80);
+
+        given()
+                .header("Authorization", "Bearer " + serviceToken())
+                .contentType(ContentType.JSON)
+                .body(antiCheatVerdict("verdict-unknown", "customVendorHeuristic", 0.95, -20))
+                .when().post("/anti-cheat-verdicts")
+                .then()
+                .statusCode(200)
+                .body("status", is("ingested"))
+                .body("globalTrustScore", is(60));
+
+        given()
+                .header("X-Profile-Id", "sha256:player-1")
+                .when().get("/results/gc-1")
+                .then()
+                .statusCode(200)
+                .body("caseHistory", hasSize(1))
+                .body("caseHistory[0].offenceType", is("none"));
+    }
+
+    @Test
+    void flaggedSampleDoesNotDowngradeConfirmedRecord() {
+        seedLinkedConnection(80);
+
+        given()
+                .header("Authorization", "Bearer " + serviceToken())
+                .contentType(ContentType.JSON)
+                .body(antiCheatVerdict("verdict-confirmed-first", "aimbot", 0.97, -30))
+                .when().post("/anti-cheat-verdicts")
+                .then()
+                .statusCode(200);
+
+        when(scoringClient.score(any())).thenReturn(
+                Uni.createFrom().item(new ScoreResponse(89, 0.9, true, "chatAbuse", 0.62, "conduct-rf-v1")));
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Profile-Id", "sha256:player-1")
+                .body(sample("gc-1", "op-1", "game-a"))
+                .when().post("/samples")
+                .then()
+                .statusCode(200)
+                .body("status", is("confirmed"))
+                .body("caseHistory", hasSize(2))
+                .body("caseHistory[1].status", is("pending"));
+    }
+
     private void awaitConsumed(int expected) {
         long deadline = System.currentTimeMillis() + 5000;
         while (simulatedOperatorReportConsumer.consumedCount() < expected

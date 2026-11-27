@@ -184,7 +184,7 @@ public class AppealService {
             if (approved) {
                 record.status = AccountabilityStatus.OVERTURNED;
                 liftActiveBans(appeal.connectionId, appeal.resolvedAt);
-                restoreTrust(record.profileId, appeal.connectionId);
+                restoreTrust(record.profileId, appeal.connectionId, appeal.appealId);
                 appendAudit(record, OffenceSource.OPERATOR, "operator:review", "APPEAL_APPROVED",
                         appeal.decisionNote);
             } else {
@@ -223,15 +223,29 @@ public class AppealService {
         }
     }
 
-    /** Reverse the trust penalties (anti-cheat verdicts + external bans) applied on a connection. */
-    private void restoreTrust(String profileId, String connectionId) {
+    /**
+     * Reverse the trust penalties (anti-cheat verdicts + external bans) applied on a connection
+     * since the previous overturned appeal (if any), preventing double-restoration on repeat cases.
+     */
+    private void restoreTrust(String profileId, String connectionId, String currentAppealId) {
         PlayerProfile profile = playerProfileRepository.findById(profileId);
         if (profile == null) {
             return;
         }
+        Instant since = appealRepository.listByProfile(profileId).stream()
+                .filter(a -> connectionId.equals(a.connectionId)
+                        && "approved".equals(a.status)
+                        && !currentAppealId.equals(a.appealId)
+                        && a.resolvedAt != null)
+                .map(a -> a.resolvedAt)
+                .max(Instant::compareTo)
+                .orElse(Instant.EPOCH);
+
         int penalty = antiCheatVerdictRepository.listByConnectionId(connectionId).stream()
+                .filter(v -> v.detectedAt == null || !v.detectedAt.isBefore(since))
                 .mapToInt(v -> v.trustDelta).sum()
                 + externalBanRepository.listByConnectionId(connectionId).stream()
+                .filter(b -> b.bannedAt == null || !b.bannedAt.isBefore(since))
                 .mapToInt(b -> b.trustDelta).sum();
         // Penalties are negative; subtracting restores the lost trust.
         profile.globalTrustScore = Math.max(MIN_TRUST, Math.min(MAX_TRUST, profile.globalTrustScore - penalty));
